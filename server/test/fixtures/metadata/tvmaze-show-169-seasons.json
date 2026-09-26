@@ -1,0 +1,33 @@
+[
+  {
+    "id": 667,
+    "url": "https://www.tvmaze.com/seasons/667/breaking-bad-season-1",
+    "number": 1,
+    "name": "",
+    "episodeOrder": 7,
+    "premiereDate": "2008-01-20",
+    "endDate": "2008-03-09",
+    "network": { "id": 20, "name": "AMC", "country": { "name": "United States", "code": "US", "timezone": "America/New_York" }, "officialSite": null },
+    "webChannel": null,
+    "image": {
+      "medium": "https://static.tvmaze.com/uploads/images/medium_portrait/24/60941.jpg",
+      "original": "https://static.tvmaze.com/uploads/images/original_untouched/24/60941.jpg"
+    },
+    "summary": "",
+    "_links": { "self": { "href": "https://api.tvmaze.com/seasons/667" } }
+  },
+  {
+    "id": 668,
+    "url": "https://www.tvmaze.com/seasons/668/breaking-bad-season-2",
+    "number": 2,
+    "name": "",
+    "episodeOrder": 13,
+    "premiereDate": "2009-03-08",
+    "endDate": "2009-05-31",
+    "network": { "id": 20, "name": "AMC", "country": { "name": "United States", "code": "US", "timezone": "America/New_York" }, "officialSite": null },
+    "webChannel": null,
+    "image": null,
+    "summary": "<p>Walt &amp; Jesse face the consequences of their choices.</p>",
+    "_links": { "self": { "href": "https://api.tvmaze.com/seasons/668" } }
+  }
+]

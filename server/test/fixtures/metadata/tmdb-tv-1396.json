@@ -1,0 +1,121 @@
+{
+  "adult": false,
+  "backdrop_path": "/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg",
+  "created_by": [
+    {
+      "id": 66633,
+      "credit_id": "52542286760ee31328001a7b",
+      "name": "Vince Gilligan",
+      "original_name": "Vince Gilligan",
+      "gender": 2,
+      "profile_path": "/z3E0DhBg1V1PZVEtS9vfFPzOWYB.jpg"
+    }
+  ],
+  "episode_run_time": [],
+  "first_air_date": "2008-01-20",
+  "genres": [
+    { "id": 18, "name": "Drama" },
+    { "id": 80, "name": "Crime" }
+  ],
+  "homepage": "https://www.sonypictures.com/tv/breakingbad",
+  "id": 1396,
+  "in_production": false,
+  "languages": ["en", "de", "es"],
+  "last_air_date": "2013-09-29",
+  "last_episode_to_air": {
+    "id": 62161,
+    "name": "Felina",
+    "overview": "All bad things must come to an end.",
+    "vote_average": 9.2,
+    "vote_count": 294,
+    "air_date": "2013-09-29",
+    "episode_number": 16,
+    "episode_type": "finale",
+    "production_code": "",
+    "runtime": 56,
+    "season_number": 5,
+    "show_id": 1396,
+    "still_path": "/pA0YwyhvdDXP3BEGL2grrIhq8aM.jpg"
+  },
+  "name": "Breaking Bad",
+  "next_episode_to_air": null,
+  "networks": [
+    { "id": 174, "logo_path": "/alqLicR1ZMHMaZGP3xRQxn9sq7p.png", "name": "AMC", "origin_country": "US" }
+  ],
+  "number_of_episodes": 62,
+  "number_of_seasons": 5,
+  "origin_country": ["US"],
+  "original_language": "en",
+  "original_name": "Breaking Bad",
+  "overview": "Walter White, a New Mexico chemistry teacher, is diagnosed with Stage III cancer and given a prognosis of only two years left to live. He becomes filled with a sense of fearlessness and an unrelenting desire to secure his family's financial future at any cost as he enters the dangerous world of drugs and crime.",
+  "popularity": 301.42,
+  "poster_path": "/ztkUQFLlC19CCMYHW9o1zWhJRNq.jpg",
+  "production_companies": [
+    { "id": 11073, "logo_path": "/aCbASRcI1MI7DXjPbSW9Fcv9uGR.png", "name": "Sony Pictures Television Studios", "origin_country": "US" },
+    { "id": 33742, "logo_path": "/ggABRkr2ErQRAIvhQ0e4KxSMyXk.png", "name": "High Bridge Productions", "origin_country": "US" },
+    { "id": 2605, "logo_path": null, "name": "Gran Via Productions", "origin_country": "US" }
+  ],
+  "production_countries": [{ "iso_3166_1": "US", "name": "United States of America" }],
+  "seasons": [
+    { "air_date": "2009-02-17", "episode_count": 9, "id": 3577, "name": "Specials", "overview": "", "poster_path": "/40dT79mDEZwXkQiZNBgSaydQFDP.jpg", "season_number": 0, "vote_average": 0 },
+    { "air_date": "2008-01-20", "episode_count": 7, "id": 3572, "name": "Season 1", "overview": "High school chemistry teacher Walter White's life is suddenly transformed by a dire medical diagnosis. Street-savvy former student Jesse Pinkman \"teaches\" Walter a new trade.", "poster_path": "/1BP4xYv9ZG4ZVHkL7ocOziBbSYH.jpg", "season_number": 1, "vote_average": 8.3 },
+    { "air_date": "2009-03-08", "episode_count": 13, "id": 3573, "name": "Season 2", "overview": "Walt must deal with the chain reaction of his choice, as he and Jesse face new and severe consequences.", "poster_path": "/e3oGYpoTUhOFK0BJfloru5ZmGV.jpg", "season_number": 2, "vote_average": 8.4 },
+    { "air_date": "2010-03-21", "episode_count": 13, "id": 3575, "name": "Season 3", "overview": "Walt continues to battle dueling identities.", "poster_path": null, "season_number": 3, "vote_average": 8.4 }
+  ],
+  "spoken_languages": [{ "english_name": "English", "iso_639_1": "en", "name": "English" }],
+  "status": "Ended",
+  "tagline": "Change the equation.",
+  "type": "Scripted",
+  "vote_average": 8.917,
+  "vote_count": 14352,
+  "credits": {
+    "cast": [
+      { "adult": false, "gender": 2, "id": 17419, "known_for_department": "Acting", "name": "Bryan Cranston", "original_name": "Bryan Cranston", "popularity": 38.6, "profile_path": "/7Jahy5LZX2Fo8fGJltMreAI49hC.jpg", "character": "Walter White", "credit_id": "52542282760ee313280017f9", "order": 0 },
+      { "adult": false, "gender": 2, "id": 84497, "known_for_department": "Acting", "name": "Aaron Paul", "original_name": "Aaron Paul", "popularity": 23.4, "profile_path": "/8Kce1utfytAG5m1PbtVoDzmDZJH.jpg", "character": "Jesse Pinkman", "credit_id": "52542282760ee31328001845", "order": 1 },
+      { "adult": false, "gender": 1, "id": 134531, "known_for_department": "Acting", "name": "Anna Gunn", "original_name": "Anna Gunn", "popularity": 11.2, "profile_path": "/adppyeu1a4REN3khtgmXusrapFi.jpg", "character": "Skyler White", "credit_id": "52542282760ee313280017a9", "order": 2 },
+      { "adult": false, "gender": 2, "id": 1217030, "known_for_department": "Acting", "name": "RJ Mitte", "original_name": "RJ Mitte", "popularity": 7.9, "profile_path": null, "character": "Walter White Jr.", "credit_id": "52542283760ee313280019e5", "order": 3 }
+    ],
+    "crew": []
+  },
+  "content_ratings": {
+    "results": [
+      { "descriptors": [], "iso_3166_1": "DE", "rating": "16" },
+      { "descriptors": [], "iso_3166_1": "AU", "rating": "MA15+" },
+      { "descriptors": [], "iso_3166_1": "US", "rating": "TV-MA" }
+    ]
+  },
+  "images": {
+    "backdrops": [
+      { "aspect_ratio": 1.778, "height": 2160, "iso_639_1": null, "file_path": "/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg", "vote_average": 5.8, "vote_count": 18, "width": 3840 },
+      { "aspect_ratio": 1.778, "height": 1080, "iso_639_1": null, "file_path": "/9faGSFi5jam6pDWGNd0p8JcJgXQ.jpg", "vote_average": 5.5, "vote_count": 9, "width": 1920 },
+      { "aspect_ratio": 1.778, "height": 1080, "iso_639_1": "en", "file_path": "/eSzpy96DwBujGFj0xMbXBcGcfxX.jpg", "vote_average": 5.4, "vote_count": 6, "width": 1920 }
+    ],
+    "logos": [
+      { "aspect_ratio": 1.787, "height": 470, "iso_639_1": "en", "file_path": "/ggFHVNu6YYI5L9pCfOacjizRGt.png", "vote_average": 5.7, "vote_count": 7, "width": 840 },
+      { "aspect_ratio": 1.787, "height": 470, "iso_639_1": null, "file_path": "/chw44B2VnHha4kz9ZFdbFMB1hQU.svg", "vote_average": 5.3, "vote_count": 2, "width": 840 }
+    ],
+    "posters": [
+      { "aspect_ratio": 0.667, "height": 3000, "iso_639_1": "en", "file_path": "/ztkUQFLlC19CCMYHW9o1zWhJRNq.jpg", "vote_average": 5.9, "vote_count": 30, "width": 2000 }
+    ]
+  },
+  "keywords": {
+    "results": [
+      { "id": 2231, "name": "drug dealer" },
+      { "id": 3801, "name": "money laundering" },
+      { "id": 6259, "name": "psychopath" },
+      { "id": 15483, "name": "high school teacher" },
+      { "id": 208289, "name": "suspenseful" }
+    ]
+  },
+  "external_ids": {
+    "imdb_id": "tt0903747",
+    "freebase_mid": "/m/03d34x8",
+    "freebase_id": "/en/breaking_bad",
+    "tvdb_id": 81189,
+    "tvrage_id": 18164,
+    "wikidata_id": "Q1079",
+    "facebook_id": "BreakingBad",
+    "instagram_id": "breakingbad",
+    "twitter_id": "BreakingBad"
+  }
+}

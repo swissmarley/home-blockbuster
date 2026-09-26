@@ -1,0 +1,95 @@
+/* Tooltips shown above circle buttons, like the real UI */
+.tip {
+  position: relative;
+}
+
+.tip::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: #e6e6e6;
+  color: #000;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.tip:hover::after,
+.tip:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
+.rating {
+  position: relative;
+  display: inline-flex;
+}
+
+.rating__pill {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: #232323;
+  border-radius: 999px;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.6), 0 8px 16px rgba(0, 0, 0, 0.5);
+  z-index: 4;
+  animation: rating-pop 0.18s ease-out;
+  --thumb-bg: #232323;
+}
+
+@keyframes rating-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+}
+
+.rating__option {
+  width: 2.1em;
+  height: 2.1em;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  transition: background-color 0.15s ease;
+}
+
+.rating__option svg {
+  width: 62%;
+  height: 62%;
+}
+
+.rating__option:hover,
+.rating__option.is-active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25em 0.55em;
+  color: #bcbcbc;
+}
+
+.meta-line .match {
+  margin-right: 0.1em;
+}
+
+.tag-line {
+  color: #fff;
+}

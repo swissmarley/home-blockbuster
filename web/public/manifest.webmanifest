@@ -1,0 +1,10 @@
+{
+  "name": "Home Blockbuster",
+  "short_name": "Blockbuster",
+  "description": "Your movies and shows, from your own drives.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#141414",
+  "theme_color": "#141414",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

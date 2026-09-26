@@ -1,0 +1,321 @@
+.browse {
+  min-height: 100vh;
+  padding-bottom: 2em;
+}
+
+.browse__spacer {
+  height: calc(var(--nav-h) + 90px);
+}
+
+.browse__none {
+  padding: 0 var(--pad);
+  color: var(--text-3);
+}
+
+.lolomo {
+  position: relative;
+  z-index: 2;
+  margin-top: -9.5vw;
+}
+
+.lolomo--flat {
+  margin-top: 0;
+}
+
+@media (max-width: 800px) {
+  .lolomo {
+    margin-top: -6vw;
+  }
+}
+
+/* Sub navigation (TV Shows / Movies + Genres) ----------------------------- */
+
+.subnav {
+  position: fixed;
+  top: var(--nav-h);
+  left: 0;
+  right: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 2.5vw;
+  padding: 0.6em var(--pad) 0.9em;
+  background: transparent;
+  transition: background-color 0.4s ease;
+}
+
+.subnav--solid {
+  background: var(--bg);
+}
+
+.subnav__title {
+  font-size: clamp(22px, 2.4vw, 38px);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+
+.subnav__crumb {
+  color: #808080;
+  font-size: 0.6em;
+  font-weight: 500;
+}
+
+.subnav__crumb:hover {
+  color: #fff;
+}
+
+.subnav__sep {
+  color: #808080;
+  font-size: 0.6em;
+}
+
+.genre-menu {
+  position: relative;
+}
+
+.genre-menu__button {
+  display: flex;
+  align-items: center;
+  gap: 1.6em;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  padding: 0.3em 0.5em 0.3em 0.7em;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.genre-menu__button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.genre-menu__button svg {
+  font-size: 18px;
+}
+
+.genre-menu__list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.7em 0;
+  columns: 3;
+  column-gap: 0;
+  min-width: 480px;
+  animation: fade-in 0.15s ease;
+}
+
+.genre-menu__list li {
+  break-inside: avoid;
+}
+
+.genre-menu__list a {
+  display: block;
+  padding: 0.25em 1.2em;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+.genre-menu__list a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 700px) {
+  .genre-menu__list {
+    columns: 2;
+    min-width: 300px;
+  }
+}
+
+/* Grid (My List, Search) --------------------------------------------------- */
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--per-row), minmax(0, 1fr));
+  gap: 4vw 0.4vw;
+  padding: 0 var(--pad);
+}
+
+.page-heading {
+  padding: calc(var(--nav-h) + 3vw) var(--pad) 2vw;
+  font-size: clamp(24px, 2.4vw, 42px);
+  font-weight: 700;
+}
+
+.page-empty {
+  padding: 3em var(--pad);
+  color: var(--text-3);
+  font-size: 1.05em;
+  line-height: 1.6;
+}
+
+/* Skeleton ----------------------------------------------------------------- */
+
+.skeleton-billboard {
+  height: 56.25vw;
+  max-height: 92vh;
+  background: linear-gradient(180deg, #1c1c1c, #141414);
+}
+
+.skeleton-row {
+  margin: 0 0 3vw;
+}
+
+.skeleton-row__title {
+  width: 18vw;
+  height: 1.2vw;
+  min-height: 14px;
+  margin: 0 var(--pad) 0.8em;
+  background: #222;
+  border-radius: 2px;
+}
+
+.skeleton-row__items {
+  display: flex;
+  gap: 0.4vw;
+  padding: 0 var(--pad);
+}
+
+.skeleton-row__item {
+  flex: 1;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  background: #222;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    background: #1f1f1f;
+  }
+  50% {
+    background: #2b2b2b;
+  }
+}
+
+/* Empty library ------------------------------------------------------------ */
+
+.empty-lib {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--nav-h) + 2em) var(--pad) 3em;
+  overflow: hidden;
+}
+
+.empty-lib__glow {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at 50% 40%, rgba(229, 9, 20, 0.22), transparent 55%);
+  pointer-events: none;
+}
+
+.empty-lib__content {
+  position: relative;
+  max-width: 640px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2em;
+  animation: fade-up 0.5s ease;
+}
+
+.empty-lib__icon {
+  width: 64px;
+  height: 64px;
+  color: var(--red);
+}
+
+.empty-lib h1 {
+  font-size: clamp(28px, 3vw, 44px);
+}
+
+.empty-lib p {
+  color: var(--text-3);
+  font-size: 1.1em;
+  line-height: 1.5;
+}
+
+.empty-lib__cta {
+  font-size: 1.15em;
+  padding: 0.8em 2em;
+}
+
+.empty-lib__progress {
+  width: min(420px, 80vw);
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.empty-lib__progress span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  transition: width 0.4s ease;
+}
+
+.empty-lib__current {
+  font-size: 0.85em !important;
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Search ------------------------------------------------------------------- */
+
+.search-page__head {
+  padding: calc(var(--nav-h) + 2.5vw) var(--pad) 2.2vw;
+  min-height: calc(var(--nav-h) + 4vw);
+}
+
+.search-page__related {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 0.5em;
+  color: #808080;
+  font-size: 15px;
+}
+
+.search-page__related span {
+  margin-right: 0.8em;
+}
+
+.search-page__related a {
+  color: #fff;
+  padding: 0 0.8em;
+  border-left: 1px solid #808080;
+}
+
+.search-page__related span + a {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.search-page__related a:hover {
+  text-decoration: underline;
+}
+
+.search-page__none {
+  padding-top: 1em;
+}
+
+.search-page__none p {
+  margin-bottom: 0.8em;
+}
+
+.search-page__none ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}

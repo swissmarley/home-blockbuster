@@ -1,0 +1,161 @@
+.fix-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.75);
+  display: grid;
+  place-items: center;
+  padding: 2em 1em;
+  animation: fade-in 0.2s ease;
+}
+
+.fix {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 4em);
+  display: flex;
+  flex-direction: column;
+  background: #1f1f1f;
+  border-radius: 8px;
+  padding: 1.6em 1.8em;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+}
+
+.fix__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fix__head h2 {
+  font-size: 1.5em;
+}
+
+.fix__close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  border-radius: 50%;
+}
+
+.fix__close:hover {
+  background: #333;
+}
+
+.fix__hint {
+  color: var(--text-3);
+  margin: 0.4em 0 1.2em;
+  font-size: 0.95em;
+}
+
+.fix__form {
+  display: flex;
+  gap: 0.6em;
+  margin-bottom: 1em;
+}
+
+.fix__year {
+  width: 6.5em;
+  flex: none;
+}
+
+.fix__form .btn svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+.fix__results {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 120px;
+  position: relative;
+  margin: 0 -0.6em;
+  padding: 0 0.6em;
+}
+
+.fix__spinner {
+  margin: 2em auto;
+}
+
+.fix__empty {
+  color: var(--text-3);
+  text-align: center;
+  padding: 2em 1em;
+}
+
+.fix__result {
+  display: flex;
+  align-items: flex-start;
+  gap: 1em;
+  width: 100%;
+  text-align: left;
+  padding: 0.8em;
+  border-radius: 6px;
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+
+.fix__result:hover:not(:disabled) {
+  background: #2c2c2c;
+}
+
+.fix__poster {
+  width: 56px;
+  flex: none;
+  aspect-ratio: 2 / 3;
+  background: #333;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.fix__poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fix__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  min-width: 0;
+}
+
+.fix__text strong em {
+  font-style: normal;
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.fix__provider {
+  font-size: 0.8em;
+  color: #54b9c5;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.fix__overview {
+  font-size: 0.85em;
+  color: var(--text-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fix__applying {
+  position: absolute;
+  right: 1em;
+  top: 50%;
+  margin-top: -1em;
+  width: 2em;
+  height: 2em;
+}
+
+.fix__footer {
+  padding-top: 1em;
+  margin-top: 0.6em;
+  border-top: 1px solid #333;
+}

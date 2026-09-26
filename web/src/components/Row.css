@@ -1,0 +1,153 @@
+.row {
+  position: relative;
+  margin: 0 0 3vw;
+}
+
+.row__header {
+  position: relative;
+  margin: 0 var(--pad) 0.6em;
+  font-size: clamp(14px, 1.4vw, 26px);
+  font-weight: 700;
+  color: var(--text-2);
+  line-height: 1.25;
+  display: flex;
+  align-items: flex-end;
+}
+
+.row__title {
+  display: inline-flex;
+  align-items: flex-end;
+}
+
+.row__explore {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6em;
+  color: #54b9c5;
+  font-weight: 600;
+  margin-left: 0.8em;
+  margin-bottom: 0.15em;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.5s ease, opacity 0.3s ease;
+}
+
+.row__explore svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.row__title--link:hover .row__explore,
+.row__header:hover .row__explore {
+  max-width: 12em;
+  opacity: 1;
+}
+
+.row__pages {
+  position: absolute;
+  right: 0;
+  bottom: 0.2em;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.row__pages li {
+  width: 12px;
+  height: 2px;
+  background: #4d4d4d;
+}
+
+.row__pages li.active {
+  background: #aaa;
+}
+
+.row:hover .row__pages {
+  opacity: 1;
+}
+
+.row__container {
+  position: relative;
+  padding: 0 var(--pad);
+  overflow-x: clip;
+}
+
+.row__track {
+  display: flex;
+  transition: transform 0.75s var(--ease-netflix);
+  will-change: transform;
+}
+
+.row__item {
+  flex: 0 0 calc(100% / var(--per-page));
+  padding: 0 0.2vw;
+  min-width: 0;
+}
+
+.row__container--touch {
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 var(--pad);
+  scrollbar-width: none;
+}
+
+.row__container--touch::-webkit-scrollbar {
+  display: none;
+}
+
+.row__container--touch .row__item {
+  scroll-snap-align: start;
+  flex-basis: calc(100% / var(--per-page) - 1.5vw);
+}
+
+.row__handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  width: calc(var(--pad) - 0.2vw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 20, 20, 0.5);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.row__handle svg {
+  width: 2.2vw;
+  height: 2.2vw;
+  min-width: 18px;
+  min-height: 18px;
+  transition: transform 0.1s ease-out;
+}
+
+.row:hover .row__handle {
+  opacity: 1;
+}
+
+.row__handle:hover {
+  background: rgba(20, 20, 20, 0.7);
+}
+
+.row__handle:hover svg {
+  transform: scale(1.25);
+}
+
+.row__handle--prev {
+  left: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.row__handle--next {
+  right: 0;
+  border-radius: 4px 0 0 4px;
+}
+
+.row--top10 .row__item {
+  padding: 0 0.3vw;
+}

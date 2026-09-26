@@ -1,0 +1,20 @@
+{
+  "Search": [
+    {
+      "Title": "Breaking Bad",
+      "Year": "2008–2013",
+      "imdbID": "tt0903747",
+      "Type": "series",
+      "Poster": "https://m.media-amazon.com/images/M/MV5BMzU5ZGYzNmQtMTdhYy00OGRiLTg0NmQtYjVjNzliZTg1ZGE4XkEyXkFqcGc@._V1_SX300.jpg"
+    },
+    {
+      "Title": "Breaking Bad: Original Minisodes",
+      "Year": "2009–2011",
+      "imdbID": "tt1587000",
+      "Type": "series",
+      "Poster": "N/A"
+    }
+  ],
+  "totalResults": "2",
+  "Response": "True"
+}

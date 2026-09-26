@@ -1,0 +1,140 @@
+.footer {
+  max-width: 980px;
+  margin: 4em auto 0;
+  padding: 0 var(--pad) 2.5em;
+  color: #808080;
+  font-size: 13px;
+}
+
+.footer__links {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9em 1em;
+  margin-bottom: 1.8em;
+}
+
+.footer__links a:hover {
+  text-decoration: underline;
+}
+
+.footer__credits {
+  font-size: 11.5px;
+  line-height: 1.5;
+  margin-bottom: 1em;
+  max-width: 720px;
+}
+
+.footer__copy {
+  font-size: 11.5px;
+}
+
+@media (max-width: 700px) {
+  .footer__links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Toasts ------------------------------------------------------------------ */
+
+.toasts {
+  position: fixed;
+  left: 50%;
+  bottom: 2em;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  width: min(520px, calc(100vw - 2em));
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  background: #e6e6e6;
+  color: #111;
+  border-radius: 4px;
+  padding: 0.8em 1em;
+  font-size: 0.95em;
+  font-weight: 600;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  animation: fade-up 0.25s ease;
+  border-left: 5px solid #54b9c5;
+}
+
+.toast--error {
+  border-left-color: var(--red);
+}
+
+.toast--success {
+  border-left-color: var(--green);
+}
+
+.toast button {
+  display: grid;
+  place-items: center;
+  font-size: 1.1em;
+  opacity: 0.6;
+}
+
+.toast button:hover {
+  opacity: 1;
+}
+
+/* Scan indicator ---------------------------------------------------------- */
+
+.scan-indicator {
+  position: fixed;
+  right: 1.5em;
+  bottom: 1.5em;
+  z-index: 150;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.4em 0.8em;
+  min-width: 250px;
+  max-width: 340px;
+  padding: 0.8em 1em;
+  background: rgba(24, 24, 24, 0.96);
+  border: 1px solid #333;
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  font-size: 13px;
+  animation: fade-up 0.3s ease;
+}
+
+.scan-indicator__spinner {
+  width: 22px;
+  height: 22px;
+  border-width: 3px;
+}
+
+.scan-indicator__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scan-indicator__text span {
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scan-indicator__bar {
+  grid-column: 1 / -1;
+  height: 3px;
+  background: #333;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.scan-indicator__bar span {
+  display: block;
+  height: 100%;
+  background: var(--red);
+  transition: width 0.3s ease;
+}

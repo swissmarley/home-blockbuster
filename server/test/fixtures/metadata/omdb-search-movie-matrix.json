@@ -1,0 +1,34 @@
+{
+  "Search": [
+    {
+      "Title": "The Matrix",
+      "Year": "1999",
+      "imdbID": "tt0133093",
+      "Type": "movie",
+      "Poster": "https://m.media-amazon.com/images/M/MV5BN2NmN2VhMTQtMDNiOS00NDlhLTliMjgtODE2ZTY0ODQyNDRhXkEyXkFqcGc@._V1_SX300.jpg"
+    },
+    {
+      "Title": "The Matrix Reloaded",
+      "Year": "2003",
+      "imdbID": "tt0234215",
+      "Type": "movie",
+      "Poster": "https://m.media-amazon.com/images/M/MV5BNjAxYjkxNjktYTU0YS00NjFhLWIyMDEtMzEzMTJjMzRkMzQ1XkEyXkFqcGc@._V1_SX300.jpg"
+    },
+    {
+      "Title": "The Matrix Revolutions",
+      "Year": "2003",
+      "imdbID": "tt0242653",
+      "Type": "movie",
+      "Poster": "https://m.media-amazon.com/images/M/MV5BMTkyNjc4NTQzOV5BMl5BanBnXkFtZTcwNDYzMTQyMQ@@._V1_SX300.jpg"
+    },
+    {
+      "Title": "The Matrix Revisited",
+      "Year": "2001",
+      "imdbID": "tt0295432",
+      "Type": "movie",
+      "Poster": "N/A"
+    }
+  ],
+  "totalResults": "4",
+  "Response": "True"
+}

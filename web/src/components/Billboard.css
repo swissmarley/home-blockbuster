@@ -1,0 +1,219 @@
+.billboard {
+  position: relative;
+  height: 56.25vw;
+  max-height: 92vh;
+  min-height: 440px;
+  background: #000;
+  user-select: none;
+}
+
+.billboard__media {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.billboard__image,
+.billboard__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+
+.billboard__image--poster {
+  filter: blur(2px) brightness(0.8);
+  transform: scale(1.05);
+  object-position: center 25%;
+}
+
+.billboard__video {
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  background: #000;
+}
+
+.billboard__video.is-playing {
+  opacity: 1;
+}
+
+.billboard__vignette {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(77deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.25) 42%, transparent 85%);
+}
+
+.billboard__fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 14.7vw;
+  background-image: linear-gradient(
+    180deg,
+    hsla(0, 0%, 8%, 0) 0,
+    hsla(0, 0%, 8%, 0.15) 15%,
+    hsla(0, 0%, 8%, 0.35) 29%,
+    hsla(0, 0%, 8%, 0.58) 44%,
+    #141414 68%,
+    #141414
+  );
+}
+
+.billboard__info {
+  position: absolute;
+  left: var(--pad);
+  bottom: 35%;
+  width: 36%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.billboard__title {
+  transform-origin: left bottom;
+  transition: transform 1.3s ease 0.2s;
+  margin-bottom: 1.2vw;
+}
+
+.billboard__logo {
+  max-width: 100%;
+  max-height: 17vw;
+  width: auto;
+  object-fit: contain;
+  object-position: left bottom;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+
+.billboard__name {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(38px, 5.4vw, 108px);
+  line-height: 0.92;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.billboard__synopsis {
+  font-size: clamp(14px, 1.2vw, 22px);
+  font-weight: 400;
+  line-height: 1.35;
+  color: #fff;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.45);
+  max-height: 12em;
+  transition: opacity 1s ease 0.2s, max-height 1s ease 0.2s, margin 1s ease;
+  overflow: hidden;
+}
+
+.billboard--playing .billboard__title {
+  transform: scale(0.72);
+}
+
+.billboard--playing .billboard__synopsis {
+  opacity: 0;
+  max-height: 0;
+}
+
+.billboard__buttons {
+  display: flex;
+  gap: 0.8vw;
+  margin-top: 1.6vw;
+}
+
+.billboard__btn {
+  font-size: clamp(13px, 1.1vw, 21px);
+  padding: 0.75em 2em 0.75em 1.5em;
+}
+
+.billboard__btn svg {
+  width: 1.7em;
+  height: 1.7em;
+}
+
+.billboard__side {
+  position: absolute;
+  right: 0;
+  bottom: 35%;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1.1vw;
+}
+
+.billboard__round {
+  width: clamp(32px, 2.6vw, 48px);
+  height: clamp(32px, 2.6vw, 48px);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.billboard__round:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #fff;
+}
+
+.billboard__round svg {
+  width: 50%;
+  height: 50%;
+}
+
+.billboard__maturity {
+  display: flex;
+  align-items: center;
+  height: clamp(30px, 2.4vw, 46px);
+  padding: 0 3.6vw 0 0.9vw;
+  border-left: 3px solid #dcdcdc;
+  background: rgba(51, 51, 51, 0.6);
+  font-size: clamp(13px, 1.1vw, 20px);
+}
+
+@media (max-width: 800px) {
+  .billboard {
+    height: 125vw;
+    max-height: 80vh;
+    min-height: 420px;
+  }
+
+  .billboard__vignette {
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, transparent 30%);
+  }
+
+  .billboard__info {
+    left: 5%;
+    right: 5%;
+    width: auto;
+    bottom: 12%;
+    align-items: center;
+    text-align: center;
+  }
+
+  .billboard__logo {
+    max-height: 30vw;
+    object-position: center bottom;
+  }
+
+  .billboard__title {
+    transform-origin: center bottom;
+  }
+
+  .billboard__synopsis {
+    display: none;
+  }
+
+  .billboard__buttons {
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .billboard__side {
+    display: none;
+  }
+}
