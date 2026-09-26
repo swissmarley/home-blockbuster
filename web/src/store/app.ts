@@ -43,6 +43,8 @@ interface AppState {
   titles: TitleSummary[];
   titleMap: Record<string, TitleSummary>;
   titlesLoaded: boolean;
+  /** When the oldest title was added (start of the first import). */
+  libraryEpoch: number;
   libraries: LibraryDTO[];
   scan: ScanProgress | null;
   profiles: ProfileDTO[];
@@ -79,6 +81,7 @@ export const useApp = create<AppState>()((set, get) => ({
   titles: [],
   titleMap: {},
   titlesLoaded: false,
+  libraryEpoch: 0,
   libraries: [],
   scan: null,
   profiles: [],
@@ -116,8 +119,12 @@ export const useApp = create<AppState>()((set, get) => ({
   async loadTitles() {
     const titles = await api.titles(get().profileId);
     const titleMap: Record<string, TitleSummary> = {};
-    for (const t of titles) titleMap[t.id] = t;
-    set({ titles, titleMap, titlesLoaded: true });
+    let libraryEpoch = Date.now();
+    for (const t of titles) {
+      titleMap[t.id] = t;
+      libraryEpoch = Math.min(libraryEpoch, t.addedAt);
+    }
+    set({ titles, titleMap, titlesLoaded: true, libraryEpoch });
   },
 
   async loadLibraries() {

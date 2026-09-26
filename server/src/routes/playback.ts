@@ -26,7 +26,7 @@ function audioTracks(audio: ProbeAudio[]): AudioTrack[] {
   const defaultIndex = browserAudioIndex(audio);
   return audio.map((a) => {
     const lang = languageInfo(a.language);
-    const base = lang.name ?? a.title ?? `Track ${a.index + 1}`;
+    const base = lang.name ?? a.title ?? (audio.length === 1 ? 'Original' : `Track ${a.index + 1}`);
     const extra = [channelLabel(a.channels), a.title && lang.name && !a.title.toLowerCase().includes(lang.name.toLowerCase()) ? a.title : null]
       .filter(Boolean)
       .join(' · ');
@@ -96,7 +96,8 @@ export function playbackRoutes(services: Services): Router {
     const url =
       decision.mode === 'direct'
         ? `/api/stream/${file.id}`
-        : `/api/stream/${file.id}/live?mode=${decision.mode}&audio=${decision.audioIndex ?? -1}&copyAudio=${decision.copyAudio ? 1 : 0}`;
+        : `/api/stream/${file.id}/live?mode=${decision.mode}&audio=${decision.audioIndex ?? -1}&copyAudio=${decision.copyAudio ? 1 : 0}` +
+          `&v=${decision.videoTarget}&a=${decision.audioTarget}`;
     const info: PlaybackInfo = {
       fileId: file.id,
       titleId: title.id,
@@ -147,6 +148,8 @@ export function playbackRoutes(services: Services): Router {
       maxHeight: Math.min(2160, Math.max(240, queryNumber(req, 'maxh') ?? 1080)),
       hwAccel: settings.hwAccel,
       encoders: ffmpeg.encoders,
+      videoTarget: req.query.v === 'vp9' ? 'vp9' : 'h264',
+      audioTarget: req.query.a === 'opus' ? 'opus' : 'aac',
     });
   });
 

@@ -125,6 +125,16 @@ describe('decidePlayback', () => {
     expect(d.reason).toMatch(/ffmpeg/);
   });
 
+  it('targets VP9/Opus for browsers without H.264/AAC (e.g. some Linux Chromium builds)', () => {
+    const chromium = parseCaps('vp9,vp8,av1,opus,vorbis,flac,webm');
+    const d = decidePlayback(file('mp4', {}), chromium, withFfmpeg);
+    expect(d).toMatchObject({ mode: 'transcode', videoTarget: 'vp9', audioTarget: 'opus', copyAudio: false });
+    expect(decidePlayback(file('mp4', {}), chrome, withFfmpeg)).toMatchObject({ videoTarget: 'h264', audioTarget: 'aac' });
+    // VP9 video only needs the audio converted.
+    const vp9 = file('mkv', { video: { codec: 'vp9', profile: null, width: 1920, height: 1080, pixFmt: 'yuv420p', bitDepth: 8, hdr: false } });
+    expect(decidePlayback(vp9, chromium, withFfmpeg)).toMatchObject({ mode: 'remux', audioTarget: 'opus' });
+  });
+
   it('forces a stream after a failed direct attempt', () => {
     expect(decidePlayback(file('mp4', {}), chrome, { ...withFfmpeg, forceStream: true }).mode).toBe('transcode');
     expect(decidePlayback(file('mp4', null), chrome, { ...withFfmpeg, forceStream: true }).mode).toBe('transcode');
@@ -191,6 +201,13 @@ describe('buildStreamArgs', () => {
   it('uses a hardware encoder only when ffmpeg has it', () => {
     expect(buildStreamArgs({ ...base, mode: 'transcode', hwAccel: 'nvenc' }).join(' ')).toContain('libx264');
     expect(buildStreamArgs({ ...base, mode: 'transcode', hwAccel: 'nvenc', encoders: new Set(['h264_nvenc']) }).join(' ')).toContain('h264_nvenc');
+  });
+
+  it('encodes VP9 and Opus when asked to', () => {
+    const args = buildStreamArgs({ ...base, mode: 'transcode', videoTarget: 'vp9', audioTarget: 'opus' }).join(' ');
+    expect(args).toContain('-c:v libvpx-vp9');
+    expect(args).toContain('-c:a libopus');
+    expect(args).not.toContain('libx264');
   });
 
   it('omits audio for silent previews and tags HEVC for Safari', () => {

@@ -166,7 +166,7 @@ export function titleSummary(title: StoredTitle, files: StoredFile[], ctx: Prese
       episodes.add(episodeKey(season, episode));
     }
   }
-  const people = [...title.cast.slice(0, 6).map((c) => c.name), ...title.directors, ...title.creators];
+  const people = [...title.cast.slice(0, 6).map((c) => c.name), ...title.directors, ...title.creators, ...title.studios];
   const durationMinutes = play?.probe?.duration ? Math.round(play.probe.duration / 60) : null;
   return {
     id: title.id,

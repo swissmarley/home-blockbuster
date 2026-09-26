@@ -47,7 +47,7 @@ export function Latest() {
       { key: 'fresh', title: 'Worth the Wait', type: 'standard', items: fresh.slice(0, 40) },
       { key: 'rated', title: 'Highest Rated', type: 'standard', items: [...titles].filter((t) => t.rating).sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 40) },
     ];
-    return out.filter((r) => (r.type === 'top10' ? r.items.length >= 5 : r.items.length > 0));
+    return out.filter((r) => (r.type === 'top10' ? r.items.length >= 10 : r.items.length > 0));
   }, [titles]);
   const topTen = useMemo(() => topTenIds(titles), [titles]);
   if (loaded && titles.length === 0) return <EmptyLibrary />;

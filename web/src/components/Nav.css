@@ -105,6 +105,10 @@
   padding: 0 28px 0 4px;
 }
 
+.search__input:focus-visible {
+  outline: none;
+}
+
 .search__input::placeholder {
   color: #9a9a9a;
 }

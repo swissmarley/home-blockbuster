@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import type { ContinueItem, TitleSummary } from '@shared/types';
-import { isRecentlyAdded } from '../lib/format';
+import { isNewArrival } from '../lib/format';
 import { canHover } from '../lib/hooks';
+import { useApp } from '../store/app';
 import { pageRect, usePreview } from './previewStore';
 import { useOpenTitle, usePlay } from './titleNavigation';
 import './TitleCard.css';
@@ -45,6 +46,7 @@ export function TitleTreatment({ title, className = '' }: { title: TitleSummary;
 }
 
 function CardArt({ title, continueItem, topTen }: { title: TitleSummary; continueItem?: ContinueItem; topTen?: boolean }) {
+  const epoch = useApp((s) => s.libraryEpoch);
   const { src, kind } = landscapeImage(title);
   const hasTitleInArt = kind === 'card' && title.images.cardHasTitle;
   return (
@@ -56,7 +58,7 @@ function CardArt({ title, continueItem, topTen }: { title: TitleSummary; continu
           <small>TOP</small>10
         </span>
       ) : null}
-      {!continueItem && isRecentlyAdded(title) ? <span className="badge-recent">Recently Added</span> : null}
+      {!continueItem && isNewArrival(title, epoch) ? <span className="badge-recent">Recently Added</span> : null}
       {continueItem ? (
         <div className="card__progress progress-bar">
           <span style={{ width: `${Math.max(2, Math.round(continueItem.progress * 100))}%` }} />

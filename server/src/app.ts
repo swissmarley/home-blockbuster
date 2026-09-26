@@ -32,6 +32,12 @@ export function createApp(services: Services): express.Express {
   app.use(express.json({ limit: '1mb' }));
 
   const api = express.Router();
+  // CSRF guard: other websites can't add custom headers to cross-origin requests without a CORS
+  // preflight (which is never granted), so state-changing calls must come from our own client.
+  api.use((req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.get('x-requested-with') === 'HomeBlockbuster') return next();
+    res.status(403).json({ error: 'Missing X-Requested-With header' });
+  });
   api.use(authRoutes(services));
   api.use(authGuard(services));
   api.use(systemRoutes(services));

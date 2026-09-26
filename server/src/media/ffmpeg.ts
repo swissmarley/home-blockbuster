@@ -251,11 +251,24 @@ export interface StreamArgsOptions {
   maxHeight: number;
   hwAccel: SettingsDTO['hwAccel'];
   encoders: Set<string>;
+  /** Encode to H.264/AAC (default) or VP9/Opus for browsers without the former. */
+  videoTarget?: 'h264' | 'vp9';
+  audioTarget?: 'aac' | 'opus';
 }
 
 function videoEncoderArgs(opts: StreamArgsOptions): { pre: string[]; args: string[] } {
   const scaleNeeded = opts.sourceHeight !== null && opts.sourceHeight > opts.maxHeight;
   const gop = ['-g', '48', '-keyint_min', '48'];
+  if (opts.videoTarget === 'vp9') {
+    return {
+      pre: [],
+      args: [
+        ...(scaleNeeded ? ['-vf', `scale=-2:${opts.maxHeight}:flags=bicubic`] : []),
+        '-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-cpu-used', '8', '-row-mt', '1',
+        '-b:v', '5M', '-maxrate', '8M', '-bufsize', '16M', '-pix_fmt', 'yuv420p', ...gop,
+      ],
+    };
+  }
   const hw = opts.hwAccel;
   if (hw === 'nvenc' && opts.encoders.has('h264_nvenc')) {
     return {
@@ -311,6 +324,7 @@ export function buildStreamArgs(opts: StreamArgsOptions): string[] {
   if (opts.mode === 'remux' && (opts.videoCodec === 'hevc' || opts.videoCodec === 'h265')) args.push('-tag:v', 'hvc1');
   if (opts.audioIndex !== null) {
     if (opts.copyAudio) args.push('-c:a', 'copy');
+    else if (opts.audioTarget === 'opus') args.push('-c:a', 'libopus', '-ac', '2', '-b:a', '160k');
     else args.push('-c:a', 'aac', '-ac', '2', '-b:a', '192k');
   }
   args.push(

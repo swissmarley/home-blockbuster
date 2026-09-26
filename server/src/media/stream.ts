@@ -99,6 +99,7 @@ export async function sendFileWithRanges(req: Request, res: Response, file: stri
 /** Tracks running ffmpeg streams so they can be capped and cleaned up. */
 export class StreamManager {
   private readonly active = new Map<number, { child: ChildProcess; key: string; startedAt: number }>();
+  private readonly stopped = new WeakSet<ChildProcess>();
   private seq = 0;
 
   constructor(private readonly ffmpeg: string, private readonly maxConcurrent = 4) {}
@@ -138,7 +139,8 @@ export class StreamManager {
     });
     child.on('close', (code, signal) => {
       this.active.delete(id);
-      if (code && code !== 0 && signal === null && !res.writableEnded) {
+      // ffmpeg exits with 255 when we stop it (seek, client gone); only report real failures.
+      if (code && signal === null && !this.stopped.has(child)) {
         log.warn(`ffmpeg exited with ${code}: ${stderr.trim().slice(0, 500)}`);
       }
       if (!res.writableEnded) res.end();
@@ -159,6 +161,7 @@ export class StreamManager {
     const entry = this.active.get(id);
     if (!entry) return;
     this.active.delete(id);
+    this.stopped.add(entry.child);
     entry.child.stdout?.unpipe();
     entry.child.kill('SIGTERM');
     setTimeout(() => {

@@ -1,0 +1,53 @@
+# Home Blockbuster with Docker Compose.
+#
+#   docker compose up -d        then open http://<this-machine>:8585
+#
+# Every folder you want to watch must be visible inside the container. Mount local folders and
+# external drives with bind mounts, and NAS shares either through the host (mount it on the host,
+# then bind-mount it) or directly with a CIFS/NFS volume as shown below. In the app, add them as
+# libraries using their path inside the container (e.g. /media/movies).
+
+services:
+  home-blockbuster:
+    build: .
+    image: home-blockbuster:latest
+    container_name: home-blockbuster
+    restart: unless-stopped
+    ports:
+      - "8585:8585"
+    environment:
+      TZ: Europe/Zurich
+      # Optional: free TMDB key for the best artwork & metadata (https://www.themoviedb.org/settings/api)
+      TMDB_API_KEY: ""
+      # Optional: free OMDb key (https://www.omdbapi.com/apikey.aspx)
+      OMDB_API_KEY: ""
+      # Optional: require a password to use the app (recommended if reachable beyond your home network)
+      HB_PASSWORD: ""
+    volumes:
+      - ./data:/data                         # database, artwork cache, thumbnails
+      # Local folders and external drives (read-only is enough, files are never modified):
+      - /path/to/Movies:/media/movies:ro
+      - /path/to/TV Shows:/media/tv:ro
+      # - /media/usb-drive:/media/usb:ro     # an external USB drive mounted on the host
+      # NAS shares mounted by Docker (see "volumes" below):
+      # - nas-movies:/media/nas-movies:ro
+      # - nas-tv:/media/nas-tv:ro
+    # Intel/AMD GPU transcoding (choose "VAAPI" in Settings → Playback):
+    # devices:
+    #   - /dev/dri:/dev/dri
+
+# volumes:
+#   # SMB / CIFS share (Synology, QNAP, TrueNAS, Windows share…)
+#   nas-movies:
+#     driver: local
+#     driver_opts:
+#       type: cifs
+#       device: "//192.168.1.10/Movies"
+#       o: "username=myuser,password=mypassword,vers=3.0,ro,uid=1000,gid=1000,iocharset=utf8"
+#   # NFS export
+#   nas-tv:
+#     driver: local
+#     driver_opts:
+#       type: nfs
+#       o: "addr=192.168.1.10,ro,nfsvers=4"
+#       device: ":/volume1/TV"

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { relativeTime } from '../lib/format';
+import { isNewArrival, relativeTime } from '../lib/format';
 import { useScrolled } from '../lib/hooks';
 import { readLocal, writeLocal } from '../lib/storage';
 import { useApp, useCurrentProfile } from '../store/app';
@@ -91,6 +91,7 @@ const SEEN_KEY = 'hb.notifications.seen';
 
 function Notifications() {
   const titles = useApp((s) => s.titles);
+  const epoch = useApp((s) => s.libraryEpoch);
   const openTitle = useOpenTitle();
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(() => Number(readLocal(SEEN_KEY) ?? 0));
@@ -98,10 +99,10 @@ function Notifications() {
   const recent = useMemo(
     () =>
       titles
-        .filter((t) => Date.now() - t.addedAt < 30 * 86_400_000)
+        .filter((t) => isNewArrival(t, epoch, 30))
         .sort((a, b) => b.addedAt - a.addedAt)
         .slice(0, 12),
-    [titles],
+    [titles, epoch],
   );
   const unread = recent.filter((t) => t.addedAt > seen).length;
 

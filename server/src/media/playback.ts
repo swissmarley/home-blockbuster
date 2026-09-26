@@ -66,11 +66,24 @@ export function browserAudioIndex(audio: ProbeAudio[]): number {
   return def ? def.index : 0;
 }
 
+export type VideoTarget = 'h264' | 'vp9';
+export type AudioTarget = 'aac' | 'opus';
+
 export interface PlaybackDecision {
   mode: PlaybackMode;
   audioIndex: number | null;
   copyAudio: boolean;
+  /** Codecs to encode to when converting: H.264/AAC, or VP9/Opus for browsers without them. */
+  videoTarget: VideoTarget;
+  audioTarget: AudioTarget;
   reason: string | null;
+}
+
+export function encodeTargets(caps: ClientCaps): { videoTarget: VideoTarget; audioTarget: AudioTarget } {
+  return {
+    videoTarget: !caps.video.has('h264') && caps.video.has('vp9') ? 'vp9' : 'h264',
+    audioTarget: !caps.audio.has('aac') && caps.audio.has('opus') ? 'opus' : 'aac',
+  };
 }
 
 export function decidePlayback(
@@ -80,9 +93,10 @@ export function decidePlayback(
 ): PlaybackDecision {
   const probe = file.probe;
   const canStream = opts.ffmpeg && opts.transcoding;
+  const targets = encodeTargets(caps);
   if (!probe) {
     // Unknown file: try the browser, fall back to a full transcode if the client reports an error.
-    return { mode: opts.forceStream && canStream ? 'transcode' : 'direct', audioIndex: null, copyAudio: false, reason: null };
+    return { mode: opts.forceStream && canStream ? 'transcode' : 'direct', audioIndex: null, copyAudio: false, ...targets, reason: null };
   }
   const audioCount = probe.audio.length;
   const wanted = opts.audioIndex ?? null;
@@ -94,20 +108,20 @@ export function decidePlayback(
   const audioSwitch = audioIndex !== null && audioIndex !== browserAudioIndex(probe.audio);
 
   if (videoOk && audioOk && containerOk && !audioSwitch && !opts.forceStream) {
-    return { mode: 'direct', audioIndex, copyAudio: true, reason: null };
+    return { mode: 'direct', audioIndex, copyAudio: true, ...targets, reason: null };
   }
   if (!canStream) {
     const reason = !opts.ffmpeg
       ? 'This file may not play in your browser. Install ffmpeg on the server to enable transcoding.'
       : 'This file may not play in your browser. Enable transcoding in Settings.';
-    return { mode: 'direct', audioIndex, copyAudio: true, reason: videoOk && audioOk ? null : reason };
+    return { mode: 'direct', audioIndex, copyAudio: true, ...targets, reason: videoOk && audioOk ? null : reason };
   }
   const copyAudio = audio !== undefined && audioOk && MP4_AUDIO.has(audio.codec);
   if (probe.video && videoOk && MP4_VIDEO.has(probe.video.codec) && !opts.forceStream) {
-    return { mode: 'remux', audioIndex, copyAudio, reason: null };
+    return { mode: 'remux', audioIndex, copyAudio, ...targets, reason: null };
   }
-  if (!probe.video) return { mode: 'remux', audioIndex, copyAudio, reason: null };
-  return { mode: 'transcode', audioIndex, copyAudio: copyAudio && audio?.codec === 'aac', reason: null };
+  if (!probe.video) return { mode: 'remux', audioIndex, copyAudio, ...targets, reason: null };
+  return { mode: 'transcode', audioIndex, copyAudio, ...targets, reason: null };
 }
 
 /**

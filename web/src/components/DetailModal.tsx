@@ -422,14 +422,17 @@ function DetailModal({ titleId }: { titleId: string }) {
               {continueItem?.episode ? (
                 <div className="detail__continue">
                   <strong>
+                    {continueItem.upNext && continueItem.position < 1 ? 'Up next: ' : ''}
                     {episodeCode(continueItem.episode)} “{continueItem.episode.name}”
                   </strong>
-                  <div className="detail__continue-bar">
-                    <div className="progress-bar">
-                      <span style={{ width: `${Math.round(continueItem.progress * 100)}%` }} />
+                  {continueItem.position >= 1 ? (
+                    <div className="detail__continue-bar">
+                      <div className="progress-bar">
+                        <span style={{ width: `${Math.round(continueItem.progress * 100)}%` }} />
+                      </div>
+                      <span>{progressLabel(continueItem.position, continueItem.duration)}</span>
                     </div>
-                    <span>{progressLabel(continueItem.position, continueItem.duration)}</span>
-                  </div>
+                  ) : null}
                 </div>
               ) : continueItem && !continueItem.episode ? (
                 <div className="detail__continue">

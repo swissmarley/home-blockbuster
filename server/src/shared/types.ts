@@ -74,7 +74,7 @@ export interface TitleSummary {
   images: ImageSet;
   addedAt: number;
   releaseDate: string | null;
-  /** Top cast / directors, used for search. */
+  /** Top cast, directors, creators and studios, used for search. */
   people: string[];
   libraryIds: string[];
   /** Default file to play: the movie file or the first episode. */

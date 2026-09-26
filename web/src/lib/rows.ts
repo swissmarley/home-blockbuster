@@ -147,8 +147,8 @@ export function buildRows(input: BuildRowsInput): RowDef[] {
   const movies = titles.filter((t) => t.kind === 'movie' && (t.rating || t.popularity));
   const shows = titles.filter((t) => t.kind === 'show' && (t.rating || t.popularity));
   const top = (list: TitleSummary[]) => [...list].sort((a, b) => trendScore(b) - trendScore(a));
-  if (filter !== 'show' && movies.length >= 5) {
-    add({ key: 'top-movies', title: 'Top 10 Movies in Your Library Today', type: 'top10', items: top(movies) }, 5);
+  if (filter !== 'show' && movies.length >= 10) {
+    add({ key: 'top-movies', title: 'Top 10 Movies in Your Library Today', type: 'top10', items: top(movies) }, 10);
   }
 
   const rated = titles.filter((t) => t.rating || t.popularity);
@@ -167,8 +167,8 @@ export function buildRows(input: BuildRowsInput): RowDef[] {
     add({ key: 'because', title: `Because You Watched ${anchor.name}`, type: 'standard', items: similar }, 3);
   }
 
-  if (filter !== 'movie' && shows.length >= 5) {
-    add({ key: 'top-shows', title: 'Top 10 TV Shows in Your Library Today', type: 'top10', items: top(shows) }, 5);
+  if (filter !== 'movie' && shows.length >= 10) {
+    add({ key: 'top-shows', title: 'Top 10 TV Shows in Your Library Today', type: 'top10', items: top(shows) }, 10);
   }
 
   // Genre rows, most common genres first.
@@ -238,12 +238,12 @@ export function buildRows(input: BuildRowsInput): RowDef[] {
   });
 }
 
-/** Top 10 lists used for the red "TOP 10" card badge. */
+/** Top 10 lists used for the red "TOP 10" card badge (only meaningful in a sizeable catalogue). */
 export function topTenIds(titles: TitleSummary[]): Set<string> {
   const ids = new Set<string>();
   for (const kind of ['movie', 'show'] as const) {
     const list = titles.filter((t) => t.kind === kind && (t.rating || t.popularity));
-    if (list.length < 5) continue;
+    if (list.length < 25) continue;
     for (const t of [...list].sort((a, b) => trendScore(b) - trendScore(a)).slice(0, 10)) ids.add(t.id);
   }
   return ids;

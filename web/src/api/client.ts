@@ -40,7 +40,10 @@ async function request<T>(method: string, url: string, body?: unknown, init?: Re
     res = await fetch(url, {
       method,
       credentials: 'same-origin',
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      headers: {
+        'X-Requested-With': 'HomeBlockbuster',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       ...init,
     });

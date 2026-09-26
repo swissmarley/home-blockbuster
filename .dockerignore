@@ -1,0 +1,8 @@
+node_modules
+dist
+data
+test-media
+coverage
+.git
+*.log
+.env

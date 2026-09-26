@@ -416,12 +416,13 @@ export function Watch() {
   // Progress reporting
   // ---------------------------------------------------------------------------
 
+  const profileId = profile?.id;
   useEffect(() => {
-    if (!info || !profile) return;
+    if (!info || !profileId) return;
     const report = (keepalive = false): void => {
       const pos = timeRef.current;
       if (pos < 1 || !durationRef.current) return;
-      api.progress(profile.id, info.fileId, pos, durationRef.current, keepalive).catch(() => undefined);
+      api.progress(profileId, info.fileId, pos, durationRef.current, keepalive).catch(() => undefined);
     };
     const interval = window.setInterval(() => {
       if (videoRef.current && !videoRef.current.paused) report();
@@ -434,13 +435,16 @@ export function Watch() {
       report(true);
       window.setTimeout(() => void refreshProfileData(), 300);
     };
-  }, [info, profile, refreshProfileData]);
+  }, [info, profileId, refreshProfileData]);
 
   // ---------------------------------------------------------------------------
   // Controls visibility
   // ---------------------------------------------------------------------------
 
+  const lastActivity = useRef(Date.now());
+
   const poke = useCallback(() => {
+    lastActivity.current = Date.now();
     setControls(true);
     setPausedLong(false);
     window.clearTimeout(hideTimer.current);
@@ -457,14 +461,19 @@ export function Watch() {
     }
   }, [playing, panel, poke]);
 
+  // "You're watching" screen after a while paused without any activity.
   useEffect(() => {
     if (playing || error || waiting) {
       setPausedLong(false);
       return;
     }
-    const t = window.setTimeout(() => setPausedLong(true), 7000);
-    return () => window.clearTimeout(t);
-  }, [playing, error, waiting, controls]);
+    const t = window.setInterval(() => {
+      if (Date.now() - lastActivity.current < 7000) return;
+      setPausedLong(true);
+      setPanel(null);
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [playing, error, waiting]);
 
   useEffect(() => {
     const onChange = (): void => setFullscreen(Boolean(document.fullscreenElement));
@@ -532,6 +541,17 @@ export function Watch() {
     setMuted(value === 0);
     writeLocal('hb.volume', String(value));
   }, []);
+
+  const panelTimer = useRef(0);
+  const hoverPanel = (name: Exclude<Panel, null>) => ({
+    onMouseEnter: () => {
+      window.clearTimeout(panelTimer.current);
+      setPanel(name);
+    },
+    onMouseLeave: () => {
+      panelTimer.current = window.setTimeout(() => setPanel((p) => (p === name ? null : p)), 350);
+    },
+  });
 
   const toggleMute = useCallback(() => {
     if (muted || volume === 0) {
@@ -730,7 +750,7 @@ export function Watch() {
   return (
     <div
       ref={containerRef}
-      className={`player ${controls || !playing ? 'player--controls' : 'player--idle'}`}
+      className={`player ${(controls || !playing) && !pausedLong ? 'player--controls' : 'player--idle'}`}
       onMouseMove={poke}
       onTouchStart={poke}
     >
@@ -823,7 +843,7 @@ export function Watch() {
           <button className="btn btn--grey player__credits" onClick={() => setNextDismissed(true)}>
             Watch Credits
           </button>
-          <button className="btn btn--play player__next-btn" onClick={() => goTo(info.next!.fileId)}>
+          <button className={`btn btn--play player__next-btn ${countdown !== null ? 'is-counting' : ''}`} onClick={() => goTo(info.next!.fileId)}>
             {countdown !== null ? <span className="player__next-fill" style={{ animationDuration: '10s' }} /> : null}
             <NextEpisodeIcon /> Next Episode
           </button>
@@ -880,14 +900,14 @@ export function Watch() {
               </button>
             ) : null}
             {episode ? (
-              <div className="player__popover">
+              <div className="player__popover" {...hoverPanel('episodes')}>
                 <button className="player__btn" aria-label="Episodes" onClick={() => setPanel(panel === 'episodes' ? null : 'episodes')}>
                   <EpisodesIcon />
                 </button>
                 {panel === 'episodes' && info ? <EpisodesPanel info={info} onPick={goTo} /> : null}
               </div>
             ) : null}
-            <div className="player__popover">
+            <div className="player__popover" {...hoverPanel('subtitles')}>
               <button className="player__btn" aria-label="Audio & Subtitles" onClick={() => setPanel(panel === 'subtitles' ? null : 'subtitles')}>
                 <SubtitlesIcon />
               </button>
@@ -932,7 +952,7 @@ export function Watch() {
                 </div>
               ) : null}
             </div>
-            <div className="player__popover">
+            <div className="player__popover" {...hoverPanel('speed')}>
               <button className="player__btn" aria-label="Playback speed" onClick={() => setPanel(panel === 'speed' ? null : 'speed')}>
                 <SpeedIcon />
               </button>

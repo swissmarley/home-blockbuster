@@ -9,6 +9,8 @@ export interface PreviewVideo {
   playing: boolean;
   /** Preview ran to its end (show a replay button). */
   finished: boolean;
+  /** The browser could not play the preview. */
+  failed: boolean;
   muted: boolean;
   toggleMute(): void;
   replay(): void;
@@ -51,6 +53,7 @@ export function usePreviewVideo(opts: {
   const [mounted, setMounted] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   const allowed = Boolean(opts.enabled && opts.url && profile?.autoplayPreviews !== false);
@@ -58,7 +61,7 @@ export function usePreviewVideo(opts: {
   const blocked = active !== null && active !== opts.id && surfacePriority(active) >= surfacePriority(opts.id);
 
   useEffect(() => {
-    if (!allowed || finished || blocked) {
+    if (!allowed || finished || failed || blocked) {
       setMounted(false);
       setPlaying(false);
       return;
@@ -68,7 +71,7 @@ export function usePreviewVideo(opts: {
       setMounted(true);
     }, opts.delayMs);
     return () => window.clearTimeout(timer);
-  }, [allowed, finished, blocked, opts.delayMs, opts.id, setActive, attempt]);
+  }, [allowed, finished, failed, blocked, opts.delayMs, opts.id, setActive, attempt]);
 
   // Release the preview slot when unmounting / disabling.
   useEffect(() => {
@@ -105,7 +108,7 @@ export function usePreviewVideo(opts: {
   const onError = useCallback(() => {
     setPlaying(false);
     setMounted(false);
-    setFinished(true);
+    setFailed(true);
   }, []);
 
   // Autoplay with sound can be refused by the browser: retry muted.
@@ -120,9 +123,10 @@ export function usePreviewVideo(opts: {
   }, [mounted, setMuted]);
 
   return {
-    mounted: mounted && !finished,
-    playing: playing && !finished,
+    mounted: mounted && !finished && !failed,
+    playing: playing && !finished && !failed,
     finished,
+    failed,
     muted,
     toggleMute: () => setMuted(!muted),
     replay: () => {
@@ -130,7 +134,7 @@ export function usePreviewVideo(opts: {
       setAttempt((a) => a + 1);
     },
     videoProps:
-      mounted && !finished && opts.url
+      mounted && !finished && !failed && opts.url
         ? {
             ref,
             src: opts.url,

@@ -56,6 +56,8 @@ const fakeFetch: FetchJson = async <T,>(url: string) => {
   return ((TMDB[key] as T | undefined) ?? (route.startsWith('search/') ? ({ results: [] } as T) : null)) as T | null;
 };
 
+const JSON_HEADERS = { 'Content-Type': 'application/json', 'X-Requested-With': 'HomeBlockbuster' };
+
 const SRT = '1\n00:00:01,000 --> 00:00:03,500\nHello <i>there</i>\n\n2\n00:00:04,000 --> 00:00:06,000\nSecond line\n';
 
 let tmp: string;
@@ -74,7 +76,7 @@ async function write(rel: string, content: string | number): Promise<string> {
 async function call<T>(method: string, url: string, body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; data: T; res: Response }> {
   const res = await fetch(base + url, {
     method,
-    headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
+    headers: { 'X-Requested-With': 'HomeBlockbuster', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
@@ -289,6 +291,16 @@ describe('profiles', () => {
   });
 });
 
+describe('request guard', () => {
+  it('rejects state-changing requests without the client header (CSRF)', async () => {
+    const res = await fetch(`${base}/api/scan`, { method: 'POST' });
+    expect(res.status).toBe(403);
+    const form = await fetch(`${base}/api/profiles`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{"name":"x"}' });
+    expect(form.status).toBe(403);
+    expect((await fetch(`${base}/api/titles`)).status).toBe(200);
+  });
+});
+
 describe('settings and system', () => {
   it('masks API keys and ignores masked values on save', async () => {
     const s = (await call<{ tmdbApiKey: string }>('GET', '/api/settings')).data;
@@ -320,9 +332,9 @@ describe('password protection', () => {
     try {
       expect((await fetch(`${url}/api/titles`)).status).toBe(401);
       expect((await fetch(`${url}/api/health`)).status).toBe(200);
-      const bad = await fetch(`${url}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'nope' }) });
+      const bad = await fetch(`${url}/api/auth/login`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ password: 'nope' }) });
       expect(bad.status).toBe(401);
-      const ok = await fetch(`${url}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 's3cret' }) });
+      const ok = await fetch(`${url}/api/auth/login`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ password: 's3cret' }) });
       const cookie = ok.headers.get('set-cookie')!.split(';')[0]!;
       expect((await fetch(`${url}/api/titles`, { headers: { Cookie: cookie } })).status).toBe(200);
     } finally {

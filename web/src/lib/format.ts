@@ -63,8 +63,18 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** i).toFixed(i >= 3 ? 2 : 0)} ${units[i]}`;
 }
 
+const DAY = 24 * 60 * 60 * 1000;
+
 export function isRecentlyAdded(t: Pick<TitleSummary, 'addedAt'>, days = 14): boolean {
-  return Date.now() - t.addedAt < days * 24 * 60 * 60 * 1000;
+  return Date.now() - t.addedAt < days * DAY;
+}
+
+/**
+ * "New arrival" badge / notification: added in the last `days`, but not part of the very first
+ * import (otherwise a fresh library would flag every single title).
+ */
+export function isNewArrival(t: Pick<TitleSummary, 'addedAt'>, libraryEpoch: number, days = 14): boolean {
+  return t.addedAt >= Math.max(Date.now() - days * DAY, libraryEpoch + DAY);
 }
 
 export function truncate(text: string, max: number): string {

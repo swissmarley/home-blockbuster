@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Avatar, AVATARS } from '../components/Avatar';
@@ -37,11 +37,16 @@ export function Welcome() {
   const loadProfiles = useApp((s) => s.loadProfiles);
   const loadSystem = useApp((s) => s.loadSystem);
   const scan = useApp((s) => s.scan);
-  const titles = useApp((s) => s.titles);
+  // No profile is selected yet, so count titles from the library stats (kept live over SSE).
+  const titleCount = useApp((s) => s.libraries.reduce((n, l) => n + l.titleCount, 0));
   const first = profiles.find((p) => !p.kids) ?? profiles[0];
   const [step, setStep] = useState<Step>('hero');
   const [name, setName] = useState(first?.name === 'Me' ? '' : (first?.name ?? ''));
   const [avatar, setAvatar] = useState(first?.avatar ?? 'smile-blue');
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [step]);
 
   const finish = async (): Promise<void> => {
     await api.completeOnboarding().catch(() => undefined);
@@ -130,7 +135,7 @@ export function Welcome() {
               <p className="welcome__muted">
                 {scanning
                   ? 'Reading your files, their tags and cover art, and fetching posters, artwork and details. This can take a while for big collections — you can start watching right away.'
-                  : `Found ${titles.length} title${titles.length === 1 ? '' : 's'}. New files are picked up automatically.`}
+                  : `Found ${titleCount} title${titleCount === 1 ? '' : 's'}. New files are picked up automatically.`}
               </p>
               {scanning ? (
                 <>

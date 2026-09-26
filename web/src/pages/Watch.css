@@ -476,11 +476,16 @@
   isolation: isolate;
 }
 
+/* While counting down the button fills from grey to white, left to right. */
+.player__next-btn.is-counting {
+  background: rgba(255, 255, 255, 0.45);
+}
+
 .player__next-fill {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: rgba(0, 0, 0, 0.2);
+  background: #fff;
   transform-origin: left;
   animation: next-fill linear forwards;
 }

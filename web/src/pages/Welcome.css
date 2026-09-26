@@ -1,12 +1,13 @@
 .welcome {
   position: relative;
   min-height: 100vh;
-  overflow: hidden;
+  overflow: clip;
   background: #000;
 }
 
+/* The wall and its shade are pinned to the viewport so tall steps scroll over them. */
 .wall {
-  position: absolute;
+  position: fixed;
   inset: -20%;
   transform: rotate(-12deg) scale(1.15);
   opacity: 0.55;
@@ -31,7 +32,7 @@
 }
 
 .welcome__shade {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background:
     radial-gradient(ellipse at center, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.85) 75%),
