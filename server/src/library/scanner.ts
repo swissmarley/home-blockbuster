@@ -14,6 +14,7 @@ import { createLogger } from '../util/log.js';
 import { cleanTitle, isExtraOrSample, isVideoFile, parseMediaPath, shouldSkipDirectory, sortName, titleKey } from './filenameParser.js';
 import { episodeKey, episodeNumbers, playFileFor } from './present.js';
 import { probeMedia } from './probe.js';
+import type { MediaGuard } from './mediaGuard.js';
 import type { LibraryRepo } from './repository.js';
 import { embeddedSubtitleTracks, findSidecarSubtitles } from './subtitles.js';
 
@@ -48,6 +49,7 @@ export interface ScannerDeps {
   metadata: MetadataService;
   events: EventBus;
   settings: () => SettingsDTO;
+  guard: MediaGuard;
 }
 
 function idleProgress(): ScanProgress {
@@ -380,8 +382,12 @@ export class Scanner {
           let isDir = entry.isDirectory();
           let isFile = entry.isFile();
           if (entry.isSymbolicLink()) {
+            // Only follow links that stay inside a library, so a link dropped into a shared folder
+            // can't publish other files on the server.
+            const target = await this.deps.guard.resolve(abs);
+            if (!target) return;
             try {
-              const st = await statSem.run(() => fs.stat(abs));
+              const st = await statSem.run(() => fs.stat(target));
               isDir = st.isDirectory();
               isFile = st.isFile();
             } catch {

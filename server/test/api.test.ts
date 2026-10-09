@@ -4,8 +4,11 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { request as httpRequest } from 'node:http';
 import { createApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
+import { isAllowedHost } from '../src/routes/auth.js';
+import { isKidFriendly } from '../src/routes/titles.js';
 import { createServices, type Services } from '../src/services.js';
 import type { ContinueItem, LibraryDTO, PlaybackInfo, ProfileDTO, ProfileState, TitleDetail, TitleSummary } from '../src/shared/types.js';
 import type { FetchJson } from '../src/types.js';
@@ -101,6 +104,9 @@ function config(dataDir: string, password: string | null = null): AppConfig {
     tmdbApiKey: null,
     omdbApiKey: null,
     mediaRoots: [],
+    trustProxy: null,
+    allowedHosts: [],
+    allowExternalSymlinks: false,
     version: 'test',
   };
 }
@@ -238,6 +244,47 @@ describe('libraries and scanning', () => {
     await services.scanner.whenIdle();
     expect((await call<LibraryDTO[]>('GET', '/api/libraries')).data.find((l) => l.name === 'Movies')!.status).toBe('idle');
   });
+
+  it('rejects libraries that overlap an existing one', async () => {
+    const parent = await call<{ error: string }>('POST', '/api/libraries', { name: 'All', path: media, kind: 'mixed' });
+    expect(parent.status).toBe(400);
+    expect(parent.data.error).toMatch(/contains the library/);
+    const child = await call<{ error: string }>('POST', '/api/libraries', { name: 'Matrix', path: path.join(media, 'Movies', 'The Matrix (1999)'), kind: 'movies' });
+    expect(child.status).toBe(400);
+    expect(child.data.error).toMatch(/inside the library "Movies"/);
+    const same = await call<{ error: string }>('POST', '/api/libraries', { name: 'Again', path: `${path.join(media, 'Movies')}/`, kind: 'movies' });
+    expect(same.data.error).toMatch(/already a library/);
+    const movies = (await call<LibraryDTO[]>('GET', '/api/libraries')).data.find((l) => l.name === 'Movies')!;
+    expect((await call('PUT', `/api/libraries/${movies.id}`, { path: media })).status).toBe(400);
+    expect((await call<LibraryDTO[]>('GET', '/api/libraries')).data.find((l) => l.id === movies.id)!.path).toBe(path.join(media, 'Movies'));
+  });
+
+  it('only follows symlinks that stay inside the libraries', async () => {
+    const secret = path.join(tmp, 'secret.txt');
+    await fs.writeFile(secret, 'TOP-SECRET');
+    await write('Links/Real/Big Buck Bunny (2008).mp4', 512);
+    await fs.mkdir(path.join(media, 'Links/Alias'), { recursive: true });
+    await fs.symlink(path.join(media, 'Links/Real/Big Buck Bunny (2008).mp4'), path.join(media, 'Links/Alias/Sintel (2010).mp4'));
+    await fs.symlink(secret, path.join(media, 'Links/Leaked Secret (2019).mp4'));
+    await fs.symlink(tmp, path.join(media, 'Links/Outside'));
+
+    const lib = (await call<LibraryDTO>('POST', '/api/libraries', { name: 'Links', path: path.join(media, 'Links'), kind: 'movies' })).data;
+    await services.scanner.whenIdle();
+    const files = services.repo.filesOfLibrary(lib.id).map((f) => path.basename(f.path)).sort();
+    expect(files).toEqual(['Big Buck Bunny (2008).mp4', 'Sintel (2010).mp4']);
+
+    // A link swapped after the scan is refused when streaming.
+    const alias = services.repo.filesOfLibrary(lib.id).find((f) => f.path.includes('Alias'))!;
+    expect((await fetch(`${base}/api/stream/${alias.id}`)).status).toBe(200);
+    await fs.rm(alias.path);
+    await fs.symlink(secret, alias.path);
+    const res = await fetch(`${base}/api/stream/${alias.id}`);
+    expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain('TOP-SECRET');
+
+    await call('DELETE', `/api/libraries/${lib.id}`);
+    await fs.rm(path.join(media, 'Links'), { recursive: true, force: true });
+  });
 });
 
 describe('profiles', () => {
@@ -289,6 +336,22 @@ describe('profiles', () => {
     const titles = (await call<TitleSummary[]>('GET', `/api/titles?profile=${kids.id}`)).data;
     expect(titles.some((t) => t.maturity === 'R' || t.maturity === 'TV-MA')).toBe(false);
   });
+
+  it('refuses deep links to mature titles on kids profiles', async () => {
+    const kids = (await call<ProfileDTO[]>('GET', '/api/profiles')).data.find((p) => p.kids)!;
+    const matrix = (await call<TitleSummary[]>('GET', '/api/titles')).data.find((t) => t.name === 'The Matrix')!;
+    expect((await call('GET', `/api/titles/${matrix.id}?profile=${kids.id}`)).status).toBe(404);
+    expect((await call('GET', `/api/playback/${matrix.playFileId}?profile=${kids.id}`)).status).toBe(403);
+    expect((await call('GET', `/api/titles/${matrix.id}`)).status).toBe(200);
+  });
+
+  it('only treats clearly child-safe ratings and genres as kid friendly', () => {
+    expect(isKidFriendly({ maturity: 'PG', genres: [] })).toBe(true);
+    expect(isKidFriendly({ maturity: 'A', genres: ['Family'] })).toBe(false); // "adults only" in India
+    expect(isKidFriendly({ maturity: null, genres: ['Animation'] })).toBe(false);
+    expect(isKidFriendly({ maturity: null, genres: ['Animation', 'Family'] })).toBe(true);
+    expect(isKidFriendly({ maturity: null, genres: ['Family', 'Horror'] })).toBe(false);
+  });
 });
 
 describe('request guard', () => {
@@ -298,6 +361,37 @@ describe('request guard', () => {
     const form = await fetch(`${base}/api/profiles`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '{"name":"x"}' });
     expect(form.status).toBe(403);
     expect((await fetch(`${base}/api/titles`)).status).toBe(200);
+  });
+
+  it('returns 404 for ids that are object prototype keys', async () => {
+    expect((await call('GET', '/api/titles/__proto__')).status).toBe(404);
+    expect((await call('GET', '/api/playback/constructor')).status).toBe(404);
+  });
+
+  it('refuses unknown public host names without a password (DNS rebinding)', async () => {
+    const get = (host: string): Promise<number> =>
+      new Promise((resolve, reject) => {
+        const req = httpRequest(`${base}/api/system`, { headers: { Host: host } }, (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    expect(await get('evil.example:8585')).toBe(403);
+    expect(await get('nas.local:8585')).toBe(200);
+    expect(await get('192.168.1.20:8585')).toBe(200);
+  });
+
+  it('recognises LAN and allowed host names', () => {
+    expect(isAllowedHost('localhost', [])).toBe(true);
+    expect(isAllowedHost('[::1]', [])).toBe(true);
+    expect(isAllowedHost('nas', [])).toBe(true);
+    expect(isAllowedHost('media.home.arpa', [])).toBe(true);
+    expect(isAllowedHost('rebind.attacker.com', [])).toBe(false);
+    expect(isAllowedHost('media.example.com', ['media.example.com'])).toBe(true);
+    expect(isAllowedHost('tv.example.com', ['.example.com'])).toBe(true);
+    expect(isAllowedHost('example.com.evil.net', ['.example.com'])).toBe(false);
   });
 });
 
@@ -317,6 +411,7 @@ describe('settings and system', () => {
     expect(info.ffmpeg.available).toBe(false);
     const listing = (await call<{ entries: Array<{ name: string }>; videoCount: number }>('GET', `/api/fs/list?path=${encodeURIComponent(path.join(media, 'Movies'))}`)).data;
     expect(listing.entries.map((e) => e.name)).toEqual(['The Matrix (1999)']);
+    expect(listing.videoCount).toBe(0); // only sample.mkv is left, which the scanner skips
     const check = (await call<{ ok: boolean; videoCount: number }>('POST', '/api/fs/check', { path: path.join(media, 'Shows') })).data;
     expect(check).toMatchObject({ ok: true, videoCount: 3 });
   });
@@ -340,6 +435,71 @@ describe('password protection', () => {
     } finally {
       await new Promise((resolve) => srv.close(resolve));
       await secured.db.flush();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('sets, uses, revokes and removes a password set in the app', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hb-auth-'));
+    const svc = await createServices(config(dir), { ffmpeg: noFfmpeg, fetchJson: fakeFetch });
+    const srv = createApp(svc).listen(0, '127.0.0.1');
+    await new Promise((resolve) => srv.once('listening', resolve));
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    const put = (body: unknown, cookie = ''): Promise<Response> =>
+      fetch(`${url}/api/auth/password`, { method: 'PUT', headers: { ...JSON_HEADERS, ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) });
+    try {
+      expect((await fetch(`${url}/api/titles`)).status).toBe(200);
+      expect((await put({ password: 'abc' })).status).toBe(400);
+      const set = await put({ password: 'hunter22' });
+      expect(set.status).toBe(200);
+      const cookie = set.headers.get('set-cookie')!.split(';')[0]!;
+      expect(svc.db.state.data.passwordHash).toMatch(/^scrypt:/);
+      expect((await fetch(`${url}/api/titles`)).status).toBe(401);
+      expect((await fetch(`${url}/api/titles`, { headers: { Cookie: cookie } })).status).toBe(200);
+
+      // Changing it needs the current password.
+      expect((await put({ password: 'another1' })).status).toBe(401);
+      expect((await put({ current: 'wrong', password: 'another1' }, cookie)).status).toBe(403);
+
+      // Signing out revokes that session.
+      expect((await fetch(`${url}/api/auth/logout`, { method: 'POST', headers: { ...JSON_HEADERS, Cookie: cookie } })).status).toBe(200);
+      expect((await fetch(`${url}/api/titles`, { headers: { Cookie: cookie } })).status).toBe(401);
+
+      const login = await fetch(`${url}/api/auth/login`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ password: 'hunter22' }) });
+      const fresh = login.headers.get('set-cookie')!.split(';')[0]!;
+      const removed = await put({ current: 'hunter22', password: '' }, fresh);
+      expect(removed.status).toBe(200);
+      expect(svc.db.state.data.passwordHash).toBeNull();
+      expect((await fetch(`${url}/api/titles`)).status).toBe(200);
+    } finally {
+      await new Promise((resolve) => srv.close(resolve));
+      await svc.db.flush();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves HB_PASSWORD in charge', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hb-auth-'));
+    const svc = await createServices(config(dir, 's3cret'), { ffmpeg: noFfmpeg, fetchJson: fakeFetch });
+    const srv = createApp(svc).listen(0, '127.0.0.1');
+    await new Promise((resolve) => srv.once('listening', resolve));
+    const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+    try {
+      const res = await fetch(`${url}/api/auth/password`, { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ password: 'takeover' }) });
+      expect(res.status).toBe(409);
+      // With a password, host names are not restricted (a rebinding page has no session cookie).
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = httpRequest(`${url}/api/auth/status`, { headers: { Host: 'media.example.com' } }, (r) => {
+          r.resume();
+          resolve(r.statusCode ?? 0);
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      expect(status).toBe(200);
+    } finally {
+      await new Promise((resolve) => srv.close(resolve));
+      await svc.db.flush();
       await fs.rm(dir, { recursive: true, force: true });
     }
   });

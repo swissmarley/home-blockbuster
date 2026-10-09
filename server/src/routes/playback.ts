@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Router } from 'express';
 import { episodeDTO, nextEpisodeFile, subtitleTracks, titleSummary } from '../library/present.js';
 import { decodeSubtitleBuffer, languageInfo, parseSubtitles } from '../library/subtitles.js';
-import { extractSubtitleVtt, grabFrame, keyframeBefore } from '../media/ffmpeg.js';
+import { extractSubtitleVtt, grabFrame, keyframeBefore, type StreamArgsOptions } from '../media/ffmpeg.js';
 import { browserAudioIndex, decidePlayback, parseCaps } from '../media/playback.js';
 import { contentTypeFor, sendFileWithRanges } from '../media/stream.js';
 import type { Services } from '../services.js';
@@ -11,7 +11,7 @@ import type { AudioTrack, PlaybackInfo, SubtitleCue } from '../shared/types.js';
 import type { ProbeAudio, StoredFile } from '../types.js';
 import { Semaphore } from '../util/concurrency.js';
 import { ApiError, notFound, param, queryNumber, queryString } from './util.js';
-import { profileFromRequest } from './titles.js';
+import { isKidFriendly, profileFromRequest } from './titles.js';
 
 function channelLabel(channels: number | null): string | null {
   if (!channels) return null;
@@ -72,6 +72,13 @@ export function playbackRoutes(services: Services): Router {
     return file;
   };
 
+  /** The file's real path, or 404 when it is gone or a symlink now points outside the libraries. */
+  const mediaPath = async (file: StoredFile): Promise<string> => {
+    const real = await services.guard.resolve(file.path);
+    if (!real) throw new ApiError(404, 'The video file is not reachable. Is the drive or network share connected?');
+    return real;
+  };
+
   router.get('/playback/:fileId', (req, res) => {
     const file = fileOr404(param(req, 'fileId'));
     const title = repo.title(file.titleId);
@@ -86,6 +93,8 @@ export function playbackRoutes(services: Services): Router {
     });
     const files = repo.filesOf(title.id);
     const profile = profileFromRequest(services, req);
+    const summary = titleSummary(title, files, services.present());
+    if (profile?.kids && !isKidFriendly(summary)) throw new ApiError(403, 'This title is not available on a Kids profile.');
     const progress = profile?.state.progress[file.id];
     const duration = file.probe?.duration ?? progress?.duration ?? null;
     let resumeAt = 0;
@@ -101,7 +110,7 @@ export function playbackRoutes(services: Services): Router {
     const info: PlaybackInfo = {
       fileId: file.id,
       titleId: title.id,
-      title: titleSummary(title, files, services.present()),
+      title: summary,
       episode: title.kind === 'show' ? episodeDTO(title, file) : null,
       next: next ? episodeDTO(title, next) : null,
       mode: decision.mode,
@@ -119,13 +128,14 @@ export function playbackRoutes(services: Services): Router {
 
   router.get('/stream/:fileId', async (req, res) => {
     const file = fileOr404(param(req, 'fileId'));
-    await sendFileWithRanges(req, res, file.path, contentTypeFor(file.ext));
+    await sendFileWithRanges(req, res, await mediaPath(file), contentTypeFor(file.ext));
   });
 
-  router.get('/stream/:fileId/live', (req, res) => {
+  router.get('/stream/:fileId/live', async (req, res) => {
     const streams = services.streams;
     if (!streams) throw new ApiError(503, 'Transcoding requires ffmpeg on the server.');
     const file = fileOr404(param(req, 'fileId'));
+    const input = await mediaPath(file);
     const probe = file.probe;
     const duration = probe?.duration ?? Number.POSITIVE_INFINITY;
     const start = Math.min(Math.max(0, queryNumber(req, 'start') ?? 0), Math.max(0, duration - 1));
@@ -136,9 +146,11 @@ export function playbackRoutes(services: Services): Router {
     else if (requested !== undefined && requested >= 0 && requested < audioCount) audioIndex = requested;
     else audioIndex = audioCount > 0 ? browserAudioIndex(probe?.audio ?? []) : null;
     const settings = services.settings();
-    const session = (queryString(req, 'session') ?? req.ip ?? 'anon').slice(0, 64);
-    streams.stream(req, res, `${session}:${file.id}`, {
-      input: file.path,
+    // Keyed by client address too, so one device's previews or seeks never replace another device's stream.
+    const owner = req.ip ?? 'anon';
+    const session = (queryString(req, 'session') ?? 'main').slice(0, 64);
+    const opts: StreamArgsOptions = {
+      input,
       start,
       mode: req.query.mode === 'transcode' ? 'transcode' : 'remux',
       audioIndex,
@@ -150,14 +162,15 @@ export function playbackRoutes(services: Services): Router {
       encoders: ffmpeg.encoders,
       videoTarget: req.query.v === 'vp9' ? 'vp9' : 'h264',
       audioTarget: req.query.a === 'opus' ? 'opus' : 'aac',
-    });
+    };
+    streams.stream(req, res, `${owner}|${session}:${file.id}`, opts, { owner, preview: session === 'preview' });
   });
 
   /** Remuxed streams can only start on a keyframe; the player asks where the nearest one is. */
   router.get('/stream/:fileId/keyframe', async (req, res) => {
     const file = fileOr404(param(req, 'fileId'));
     const t = Math.max(0, queryNumber(req, 't') ?? 0);
-    const at = ffmpeg.ffprobe ? await keyframeBefore(ffmpeg.ffprobe, file.path, t) : t;
+    const at = ffmpeg.ffprobe ? await keyframeBefore(ffmpeg.ffprobe, await mediaPath(file), t) : t;
     res.json({ t: at });
   });
 
@@ -172,7 +185,8 @@ export function playbackRoutes(services: Services): Router {
     try {
       await fs.access(out);
     } catch {
-      const buf = await frameSem.run(() => grabFrame(ffmpeg.ffmpeg!, file.path, t, 320));
+      const input = await mediaPath(file);
+      const buf = await frameSem.run(() => grabFrame(ffmpeg.ffmpeg!, input, t, 320));
       if (!buf) throw new ApiError(404, 'No frame');
       await fs.mkdir(path.dirname(out), { recursive: true });
       await fs.writeFile(out, buf);
@@ -195,9 +209,11 @@ export function playbackRoutes(services: Services): Router {
     if (sub.source === 'sidecar' && sub.path && sub.format !== 'embedded') {
       let buf: Buffer;
       try {
-        const st = await fs.stat(sub.path);
+        const real = await services.guard.resolve(sub.path);
+        if (!real) throw notFound('Subtitle file');
+        const st = await fs.stat(real);
         if (st.size > 15 * 1024 * 1024) throw new ApiError(413, 'Subtitle file is too large');
-        buf = await fs.readFile(sub.path);
+        buf = await fs.readFile(real);
       } catch (err) {
         if (err instanceof ApiError) throw err;
         throw notFound('Subtitle file');
@@ -212,7 +228,8 @@ export function playbackRoutes(services: Services): Router {
       } catch {
         let pending = extracting.get(vttPath);
         if (!pending) {
-          pending = extractSubtitleVtt(ffmpeg.ffmpeg, file.path, sub.streamIndex).then(async (text) => {
+          const input = await mediaPath(file);
+          pending = extractSubtitleVtt(ffmpeg.ffmpeg, input, sub.streamIndex).then(async (text) => {
             if (text) {
               await fs.mkdir(path.dirname(vttPath), { recursive: true });
               await fs.writeFile(vttPath, text, 'utf8');

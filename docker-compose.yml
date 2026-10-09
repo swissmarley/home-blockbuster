@@ -21,8 +21,13 @@ services:
       TMDB_API_KEY: ""
       # Optional: free OMDb key (https://www.omdbapi.com/apikey.aspx)
       OMDB_API_KEY: ""
-      # Optional: require a password to use the app (recommended if reachable beyond your home network)
+      # Optional: require a password to use the app. You can also set one in the app (Settings → Security).
       HB_PASSWORD: ""
+      # Behind a reverse proxy: trust its X-Forwarded-* headers (client IPs, HTTPS cookies)
+      # TRUST_PROXY: "1"
+      # Without a password, only IPs, localhost and LAN names (nas, *.local, *.lan…) are answered.
+      # List other host names you open the app with, comma separated:
+      # ALLOWED_HOSTS: "media.example.com"
     volumes:
       - ./data:/data                         # database, artwork cache, thumbnails
       # Local folders and external drives (read-only is enough, files are never modified):
@@ -32,9 +37,12 @@ services:
       # NAS shares mounted by Docker (see "volumes" below):
       # - nas-movies:/media/nas-movies:ro
       # - nas-tv:/media/nas-tv:ro
-    # Intel/AMD GPU transcoding (choose "VAAPI" in Settings → Playback):
+    # Intel/AMD GPU transcoding (choose "VAAPI" in Settings → Playback). The server runs as the
+    # unprivileged "node" user, so also give it the host's render group (see `getent group render`):
     # devices:
     #   - /dev/dri:/dev/dri
+    # group_add:
+    #   - "109"
 
 # volumes:
 #   # SMB / CIFS share (Synology, QNAP, TrueNAS, Windows share…)

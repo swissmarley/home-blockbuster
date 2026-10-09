@@ -12,6 +12,7 @@ import {
   FolderIcon,
   HelpIcon,
   LayersIcon,
+  LockIcon,
   PencilIcon,
   PlayIcon,
   PlusIcon,
@@ -21,6 +22,7 @@ import {
   TvIcon,
 } from '../components/Icons';
 import { Logo } from '../components/Logo';
+import { PasswordForm } from '../components/PasswordForm';
 import { relativeTime } from '../lib/format';
 import { useApp, useCurrentProfile } from '../store/app';
 import { LibraryForm } from './LibraryForm';
@@ -498,6 +500,40 @@ function PlaybackSettings() {
   );
 }
 
+function SecuritySettings() {
+  const system = useApp((s) => s.system);
+  if (!system) return <div className="spinner settings-spinner" />;
+  const source = system.authSource;
+
+  return (
+    <section className="settings-section">
+      <h1>Security</h1>
+      <p className="settings-lead">
+        A password protects every screen and the whole API, including the folder browser and these settings. Anyone who opens Home Blockbuster on a
+        new device has to sign in once; profiles stay as they are.
+      </p>
+      <div className={`status-card ${source ? 'status-card--ok' : 'status-card--warn'}`}>
+        <strong>{source ? 'Password protection is on' : 'No password is set'}</strong>
+        <p>
+          {source === 'env' ? (
+            <>
+              The password comes from the <code>HB_PASSWORD</code> setting on the server. Change or remove it there and restart.
+            </>
+          ) : source === 'app' ? (
+            'Signed-in devices stay signed in for 30 days. Changing the password signs out every other device.'
+          ) : (
+            'Anyone who can reach this server on your network can browse its folders, change libraries and settings, and watch everything. Set a password if you share your network with guests, flatmates or smart devices you do not trust.'
+          )}
+        </p>
+      </div>
+      {source === 'env' ? null : <PasswordForm hasPassword={source === 'app'} />}
+      <p className="settings-muted security-note">
+        The Kids profile only filters what is shown; it is not a lock. Anyone using the app can switch profiles.
+      </p>
+    </section>
+  );
+}
+
 const SHORTCUTS: Array<[string, string]> = [
   ['Space / K', 'Play or pause'],
   ['← / →', 'Back / forward 10 seconds'],
@@ -593,6 +629,9 @@ export function Settings() {
           <NavLink to="/settings/playback">
             <PlayIcon /> Playback
           </NavLink>
+          <NavLink to="/settings/security">
+            <LockIcon /> Security
+          </NavLink>
           <NavLink to="/settings/about">
             <HelpIcon /> Help &amp; About
           </NavLink>
@@ -602,6 +641,7 @@ export function Settings() {
             <Route path="libraries" element={<LibrariesSettings />} />
             <Route path="metadata" element={<MetadataSettings />} />
             <Route path="playback" element={<PlaybackSettings />} />
+            <Route path="security" element={<SecuritySettings />} />
             <Route path="about" element={<AboutSettings />} />
             <Route path="*" element={<Navigate to="/settings/libraries" replace />} />
           </Routes>

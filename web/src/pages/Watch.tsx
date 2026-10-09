@@ -221,9 +221,10 @@ function EpisodesPanel({ info, onPick }: { info: PlaybackInfo; onPick: (fileId: 
   const [detail, setDetail] = useState<TitleDetail | null>(null);
   const [season, setSeason] = useState<number | null>(info.episode?.season ?? null);
   const progress = useApp((s) => s.profileState?.progress);
+  const profileId = useApp((s) => s.profileId);
   useEffect(() => {
-    api.title(info.titleId).then(setDetail).catch(() => undefined);
-  }, [info.titleId]);
+    api.title(info.titleId, profileId).then(setDetail).catch(() => undefined);
+  }, [info.titleId, profileId]);
   if (!detail) return <div className="panel panel--episodes"><div className="spinner panel__spinner" /></div>;
   const current = detail.seasons.find((s) => s.number === season);
   return (
@@ -857,7 +858,8 @@ export function Watch() {
           </button>
         </div>
 
-        <div className="player__bottom" onClick={(e) => e.stopPropagation()}>
+        {/* Hidden behind the error screen: a seek bar and play button for a video that failed would only confuse. */}
+        <div className="player__bottom" hidden={Boolean(error)} onClick={(e) => e.stopPropagation()}>
           <div className="player__timeline">
             <Scrubber
               time={time}

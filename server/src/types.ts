@@ -224,6 +224,10 @@ export interface StateData {
   onboarded: boolean;
   /** Random secret used to sign auth cookies. */
   secret: string;
+  /** Password set from the app ("scrypt:salt:hash"); HB_PASSWORD takes precedence. */
+  passwordHash: string | null;
+  /** Signed-out sessions, kept until they would have expired. */
+  revokedSessions: Array<{ sig: string; expiresAt: number }>;
 }
 
 // ---------------------------------------------------------------------------

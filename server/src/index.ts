@@ -1,5 +1,6 @@
 import os from 'node:os';
 import { createApp } from './app.js';
+import { authRequired } from './routes/auth.js';
 import { loadConfig } from './config.js';
 import { createServices } from './services.js';
 import { createLogger } from './util/log.js';
@@ -23,10 +24,18 @@ async function main(): Promise<void> {
 
   const server = app.listen(config.port, config.host, () => {
     log.info(`Home Blockbuster ${config.version} is running`);
+    const wildcard = ['0.0.0.0', '::', '0:0:0:0:0:0:0:0'].includes(config.host);
+    const loopback = ['127.0.0.1', 'localhost', '::1'].includes(config.host);
     log.info(`  Local:   http://localhost:${config.port}`);
-    for (const ip of lanAddresses()) log.info(`  Network: http://${ip}:${config.port}`);
+    if (wildcard) for (const ip of lanAddresses()) log.info(`  Network: http://${ip}:${config.port}`);
+    else if (!loopback) log.info(`  Network: http://${config.host.includes(':') ? `[${config.host}]` : config.host}:${config.port}`);
     if (!config.webDir) log.warn('Web client not built — run "npm run build" (or "npm run dev" for development).');
     if (config.password) log.info('Password protection is enabled (HB_PASSWORD).');
+    else if (authRequired(services)) log.info('Password protection is enabled (set in Settings → Security).');
+    else if (!loopback) {
+      log.warn('No password is set: anyone on your network can browse server folders and change settings.');
+      log.warn('Set one in Settings → Security, or with HB_PASSWORD.');
+    }
     log.info(`Data directory: ${config.dataDir}`);
   });
   server.on('error', (err) => {

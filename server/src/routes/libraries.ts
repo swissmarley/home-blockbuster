@@ -2,7 +2,8 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Router } from 'express';
-import { isVideoFile, shouldSkipDirectory } from '../library/filenameParser.js';
+import { isExtraOrSample, isVideoFile, shouldSkipDirectory } from '../library/filenameParser.js';
+import { isInside } from '../library/mediaGuard.js';
 import type { Services } from '../services.js';
 import type { FsCheckResult, FsListing, FsRoot, LibraryDTO, LibraryKind } from '../shared/types.js';
 import type { StoredLibrary } from '../types.js';
@@ -80,6 +81,19 @@ async function listRoots(extra: string[]): Promise<FsRoot[]> {
   return roots;
 }
 
+/** Whether a video counts as a library entry, using the same rules as the scanner (no samples, trailers or extras). */
+async function countsAsVideo(dir: string, name: string): Promise<boolean> {
+  if (!isVideoFile(name)) return false;
+  if (!isExtraOrSample(name, 0)) return true;
+  // Only "sample" names depend on the file size; skip the stat for everything else.
+  if (isExtraOrSample(name, Number.MAX_SAFE_INTEGER)) return false;
+  try {
+    return !isExtraOrSample(name, (await fs.stat(path.join(dir, name))).size);
+  } catch {
+    return false;
+  }
+}
+
 /** Count videos below `root` with time/size limits so huge NAS shares don't stall the UI. */
 async function quickVideoCount(root: string, budgetMs = 2500, maxDirs = 400): Promise<number> {
   const deadline = Date.now() + budgetMs;
@@ -97,7 +111,7 @@ async function quickVideoCount(root: string, budgetMs = 2500, maxDirs = 400): Pr
     }
     for (const e of entries) {
       if (e.isDirectory() && !shouldSkipDirectory(e.name)) queue.push(path.join(dir, e.name));
-      else if (e.isFile() && isVideoFile(e.name)) count++;
+      else if (e.isFile() && (await countsAsVideo(dir, e.name))) count++;
     }
   }
   return count;
@@ -108,6 +122,18 @@ export function libraryRoutes(services: Services): Router {
   const { db, repo, scanner, events, config } = services;
 
   const libraries = (): StoredLibrary[] => db.state.data.libraries;
+
+  /** A folder may not be, contain, or sit inside another library: every file would be listed twice. */
+  const assertNoOverlap = (folder: string, exceptId?: string): void => {
+    for (const other of libraries()) {
+      if (other.id === exceptId) continue;
+      if (isInside(folder, other.path) && isInside(other.path, folder)) throw badRequest('This folder is already a library.');
+      if (isInside(folder, other.path)) throw badRequest(`This folder is inside the library "${other.name}", which already includes it.`);
+      if (isInside(other.path, folder)) {
+        throw badRequest(`This folder contains the library "${other.name}". Remove that library first, or pick a different folder.`);
+      }
+    }
+  };
 
   const toDTO = (lib: StoredLibrary): LibraryDTO => {
     const files = repo.filesOfLibrary(lib.id);
@@ -129,7 +155,7 @@ export function libraryRoutes(services: Services): Router {
     if (!(await isDir(folder))) {
       throw badRequest('That folder does not exist or is not reachable from the server. Is the drive or share connected?');
     }
-    if (libraries().some((l) => l.path === folder)) throw badRequest('This folder is already a library.');
+    assertNoOverlap(folder);
     const kind = KINDS.includes(input.kind as LibraryKind) ? (input.kind as LibraryKind) : 'mixed';
     const lib: StoredLibrary = {
       id: randomId(),
@@ -158,6 +184,7 @@ export function libraryRoutes(services: Services): Router {
       const folder = normalizeLibraryPath(input.path);
       if (folder !== lib.path) {
         if (!(await isDir(folder))) throw badRequest('That folder does not exist or is not reachable.');
+        assertNoOverlap(folder, lib.id);
         lib.path = folder;
         rescan = true;
       }
@@ -238,7 +265,7 @@ export function libraryRoutes(services: Services): Router {
       const full = path.join(dir, e.name);
       if (e.isDirectory() || (e.isSymbolicLink() && (await isDir(full)))) {
         if (!shouldSkipDirectory(e.name)) folders.push({ name: e.name, path: full });
-      } else if (e.isFile() && isVideoFile(e.name)) {
+      } else if (e.isFile() && (await countsAsVideo(dir, e.name))) {
         videoCount++;
       }
     }

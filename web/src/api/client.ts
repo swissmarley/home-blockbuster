@@ -75,6 +75,8 @@ const qs = (params: Record<string, string | number | boolean | null | undefined>
 
 export const api = {
   authStatus: () => get<{ required: boolean; authenticated: boolean }>('/api/auth/status'),
+  setPassword: (current: string, password: string) =>
+    request<{ required: boolean; authenticated: boolean; source: SystemInfo['authSource'] }>('PUT', '/api/auth/password', { current, password }),
   login: (password: string) => request<{ ok: boolean }>('POST', '/api/auth/login', { password }),
   logout: () => request<{ ok: boolean }>('POST', '/api/auth/logout'),
 
@@ -98,7 +100,7 @@ export const api = {
   fsCheck: (path: string) => request<FsCheckResult>('POST', '/api/fs/check', { path }),
 
   titles: (profileId?: string | null) => get<TitleSummary[]>(`/api/titles${qs({ profile: profileId })}`),
-  title: (id: string) => get<TitleDetail>(`/api/titles/${id}`),
+  title: (id: string, profileId?: string | null) => get<TitleDetail>(`/api/titles/${id}${qs({ profile: profileId })}`),
   refreshTitle: (id: string) => request<TitleDetail>('POST', `/api/titles/${id}/refresh`),
   unlockTitle: (id: string) => request<TitleDetail>('POST', `/api/titles/${id}/unlock`),
   candidates: (id: string, q?: string, year?: number | null) => get<MatchCandidate[]>(`/api/titles/${id}/candidates${qs({ q, year })}`),

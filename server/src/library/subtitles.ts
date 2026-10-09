@@ -402,6 +402,27 @@ function decodeUtf16(bytes: Uint8Array, bigEndian: boolean): string {
   return new TextDecoder('utf-16le').decode(swapped);
 }
 
+// Windows-1252 differs from Latin-1 only in 0x80–0x9F. Decoded by hand because some Node builds
+// (e.g. 22.20) map the "windows-1252" TextDecoder label to plain Latin-1.
+const CP1252_HIGH = [
+  0x20ac, 0x81, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x8d, 0x017d, 0x8f,
+  0x90, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x9d, 0x017e, 0x0178,
+];
+
+export function decodeWindows1252(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    const chunk = bytes.subarray(i, i + 8192);
+    const codes = new Array<number>(chunk.length);
+    for (let j = 0; j < chunk.length; j++) {
+      const b = chunk[j]!;
+      codes[j] = b >= 0x80 && b <= 0x9f ? CP1252_HIGH[b - 0x80]! : b;
+    }
+    out += String.fromCharCode(...codes);
+  }
+  return out;
+}
+
 /** BOM sniffing (UTF-8 / UTF-16 LE / BE), then strict UTF-8, then Windows-1252. */
 export function decodeSubtitleBuffer(buf: Buffer | Uint8Array): string {
   const b: Uint8Array = buf;
@@ -416,7 +437,7 @@ export function decodeSubtitleBuffer(buf: Buffer | Uint8Array): string {
   try {
     return stripBom(new TextDecoder('utf-8', { fatal: true }).decode(b));
   } catch {
-    return stripBom(new TextDecoder('windows-1252').decode(b));
+    return stripBom(decodeWindows1252(b));
   }
 }
 

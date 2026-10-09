@@ -208,38 +208,42 @@ function ProfileMenu() {
                   </button>
                 </li>
               ))}
-            <li>
-              <button role="menuitem" onClick={() => navigate('/profiles/manage')}>
-                <span className="account__icon">
-                  <PencilIcon />
-                </span>
-                <span>Manage Profiles</span>
-              </button>
-            </li>
-            <li>
-              <button role="menuitem" onClick={() => navigate('/settings/libraries')}>
-                <span className="account__icon">
-                  <FolderIcon />
-                </span>
-                <span>Media Libraries</span>
-              </button>
-            </li>
-            <li>
-              <button role="menuitem" onClick={() => navigate('/settings/metadata')}>
-                <span className="account__icon">
-                  <SlidersIcon />
-                </span>
-                <span>Settings</span>
-              </button>
-            </li>
-            <li>
-              <button role="menuitem" onClick={() => navigate('/settings/about')}>
-                <span className="account__icon">
-                  <HelpIcon />
-                </span>
-                <span>Help Center</span>
-              </button>
-            </li>
+            {current.kids ? null : (
+              <>
+                <li>
+                  <button role="menuitem" onClick={() => navigate('/profiles/manage')}>
+                    <span className="account__icon">
+                      <PencilIcon />
+                    </span>
+                    <span>Manage Profiles</span>
+                  </button>
+                </li>
+                <li>
+                  <button role="menuitem" onClick={() => navigate('/settings/libraries')}>
+                    <span className="account__icon">
+                      <FolderIcon />
+                    </span>
+                    <span>Media Libraries</span>
+                  </button>
+                </li>
+                <li>
+                  <button role="menuitem" onClick={() => navigate('/settings/metadata')}>
+                    <span className="account__icon">
+                      <SlidersIcon />
+                    </span>
+                    <span>Settings</span>
+                  </button>
+                </li>
+                <li>
+                  <button role="menuitem" onClick={() => navigate('/settings/about')}>
+                    <span className="account__icon">
+                      <HelpIcon />
+                    </span>
+                    <span>Help Center</span>
+                  </button>
+                </li>
+              </>
+            )}
           </ul>
           <button className="account__signout" role="menuitem" onClick={() => void signOut()}>
             <LogoutIcon />

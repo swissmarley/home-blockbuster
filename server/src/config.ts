@@ -16,6 +16,12 @@ export interface AppConfig {
   omdbApiKey: string | null;
   /** Extra folders offered as shortcuts by the folder browser (e.g. Docker volume mounts). */
   mediaRoots: string[];
+  /** Express "trust proxy" value (TRUST_PROXY), for correct client IPs and HTTPS detection behind a reverse proxy. */
+  trustProxy: boolean | number | string | null;
+  /** Host names (besides IPs, localhost and LAN names) the server answers to when no password is set. */
+  allowedHosts: string[];
+  /** Follow symlinks that point outside every library folder (off by default). */
+  allowExternalSymlinks: boolean;
   version: string;
 }
 
@@ -48,6 +54,22 @@ const nonEmpty = (value: string | undefined): string | null => {
   return trimmed ? trimmed : null;
 };
 
+const isTrue = (value: string | undefined): boolean => /^(1|true|yes|on)$/i.test(value?.trim() ?? '');
+
+const list = (value: string | undefined): string[] =>
+  (value ?? '')
+    .split(/[;,]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+function parseTrustProxy(value: string | undefined): AppConfig['trustProxy'] {
+  const v = nonEmpty(value);
+  if (!v || /^(0|false|no|off)$/i.test(v)) return null;
+  if (/^(true|yes|on)$/i.test(v)) return true;
+  if (/^\d+$/.test(v)) return Number(v); // number of proxy hops
+  return v; // e.g. "loopback", "10.0.0.0/8"
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: Number.parseInt(env.PORT ?? '', 10) || 8585,
@@ -59,10 +81,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     password: nonEmpty(env.HB_PASSWORD),
     tmdbApiKey: nonEmpty(env.TMDB_API_KEY),
     omdbApiKey: nonEmpty(env.OMDB_API_KEY),
-    mediaRoots: (env.MEDIA_ROOTS ?? '')
-      .split(/[;,]/)
-      .map((p) => p.trim())
-      .filter(Boolean),
+    mediaRoots: list(env.MEDIA_ROOTS),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
+    allowedHosts: list(env.ALLOWED_HOSTS).map((h) => h.toLowerCase()),
+    allowExternalSymlinks: isTrue(env.ALLOW_EXTERNAL_SYMLINKS),
     version: readVersion(),
   };
 }

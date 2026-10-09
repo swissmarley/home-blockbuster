@@ -279,6 +279,8 @@ export interface SystemInfo {
   fileCount: number;
   libraryCount: number;
   authRequired: boolean;
+  /** Where the password comes from: the HB_PASSWORD variable, the app's Security settings, or nowhere. */
+  authSource: 'env' | 'app' | null;
   /** False until the first-run setup has been completed or skipped. */
   onboarded: boolean;
 }

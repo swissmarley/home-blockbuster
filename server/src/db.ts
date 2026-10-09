@@ -71,7 +71,8 @@ export class JsonStore<T> {
       const tmp = `${this.file}.${process.pid}.tmp`;
       try {
         await fs.mkdir(path.dirname(this.file), { recursive: true });
-        await fs.writeFile(tmp, JSON.stringify(this.data), 'utf8');
+        // Owner-only: state.json holds API keys and the session secret.
+        await fs.writeFile(tmp, JSON.stringify(this.data), { encoding: 'utf8', mode: 0o600 });
         await fs.rename(tmp, this.file);
       } catch (err) {
         this.dirty = true;
@@ -122,11 +123,18 @@ function defaultState(): StateData {
     profiles: [newProfile('Me', 'smile-blue'), newProfile('Kids', 'kids-rainbow', true)],
     onboarded: false,
     secret: randomSecret(),
+    passwordHash: null,
+    revokedSessions: [],
   };
 }
 
+/** Maps keyed by ids from requests must not resolve inherited keys such as "__proto__". */
+function dict<T>(source?: Record<string, T>): Record<string, T> {
+  return Object.assign(Object.create(null) as Record<string, T>, source);
+}
+
 function defaultLibrary(): LibraryData {
-  return { version: LIBRARY_VERSION, files: {}, titles: {}, groups: {} };
+  return { version: LIBRARY_VERSION, files: dict(), titles: dict(), groups: dict() };
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -152,6 +160,10 @@ function migrateState(raw: unknown): StateData {
     })),
     onboarded: Boolean(data.onboarded),
     secret: typeof data.secret === 'string' && data.secret.length >= 32 ? data.secret : base.secret,
+    passwordHash: typeof data.passwordHash === 'string' && data.passwordHash.startsWith('scrypt:') ? data.passwordHash : null,
+    revokedSessions: Array.isArray(data.revokedSessions)
+      ? data.revokedSessions.filter((r) => typeof r?.sig === 'string' && typeof r.expiresAt === 'number' && r.expiresAt > Date.now())
+      : [],
   };
 }
 
@@ -160,9 +172,9 @@ function migrateLibrary(raw: unknown): LibraryData {
   const data = raw as Partial<LibraryData>;
   return {
     version: LIBRARY_VERSION,
-    files: isObject(data.files) ? (data.files as LibraryData['files']) : {},
-    titles: isObject(data.titles) ? (data.titles as LibraryData['titles']) : {},
-    groups: isObject(data.groups) ? (data.groups as LibraryData['groups']) : {},
+    files: dict(isObject(data.files) ? (data.files as LibraryData['files']) : undefined),
+    titles: dict(isObject(data.titles) ? (data.titles as LibraryData['titles']) : undefined),
+    groups: dict(isObject(data.groups) ? (data.groups as LibraryData['groups']) : undefined),
   };
 }
 
