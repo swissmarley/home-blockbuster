@@ -735,6 +735,12 @@
   color: var(--text-4);
 }
 
+/* Security ------------------------------------------------------------------ */
+
+.security-note {
+  margin-top: 2em;
+}
+
 /* Playback ------------------------------------------------------------------ */
 
 .status-card {
@@ -859,7 +865,8 @@ kbd {
 
 @media (max-width: 900px) {
   .settings__layout {
-    grid-template-columns: 1fr;
+    /* minmax(0, …): long paths must wrap or scroll inside the column, not widen the page. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 1.5em;
   }
 

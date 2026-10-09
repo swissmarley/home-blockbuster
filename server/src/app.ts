@@ -1,6 +1,6 @@
 import path from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { authGuard, authRoutes } from './routes/auth.js';
+import { authGuard, authRoutes, hostGuard } from './routes/auth.js';
 import { imageRoutes } from './routes/images.js';
 import { libraryRoutes } from './routes/libraries.js';
 import { playbackRoutes } from './routes/playback.js';
@@ -29,6 +29,8 @@ const CSP = [
 export function createApp(services: Services): express.Express {
   const app = express();
   app.disable('x-powered-by');
+  if (services.config.trustProxy !== null) app.set('trust proxy', services.config.trustProxy);
+  app.use(hostGuard(services));
   app.use(express.json({ limit: '1mb' }));
 
   const api = express.Router();

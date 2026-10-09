@@ -6,17 +6,22 @@ import type { ProviderId, TitleSummary } from '../shared/types.js';
 import type { StoredProfile } from '../types.js';
 import { ApiError, badRequest, body, notFound, param, queryNumber, queryString } from './util.js';
 
+// Certifications that mean "suitable for children" in the supported regions. Ambiguous ones are left
+// out on purpose: "A" is "adults only" in India, so a kid-safe list must not contain it.
 const KID_RATINGS = new Set([
-  'G', 'PG', 'TV-Y', 'TV-Y7', 'TV-Y7-FV', 'TV-G', 'TV-PG', 'U', 'UC', 'ALL', 'AL', 'A', 'L', '0', '0+', '6', '6+', '7', '7+',
+  'G', 'PG', 'TV-Y', 'TV-Y7', 'TV-Y7-FV', 'TV-G', 'TV-PG', 'U', 'UC', 'ALL', 'AL', 'L', '0', '0+', '6', '6+', '7', '7+',
   'FSK 0', 'FSK 6', 'FSK0', 'FSK6', 'TP', 'K-7', 'E',
 ]);
 
-/** Kids profiles only see titles rated for children, or unrated family/animation titles. */
+/**
+ * Kids profiles only see titles rated for children, or unrated titles explicitly tagged as family or
+ * children's content. "Animation" alone is not enough: plenty of animation is made for adults.
+ */
 export function isKidFriendly(s: Pick<TitleSummary, 'maturity' | 'genres'>): boolean {
   if (s.maturity) return KID_RATINGS.has(s.maturity.toUpperCase().trim());
   const genres = s.genres.map((g) => g.toLowerCase());
-  if (genres.some((g) => /horror|thriller|crime|war|erotic/.test(g))) return false;
-  return genres.some((g) => /family|kids|children|animation/.test(g));
+  if (genres.some((g) => /horror|thriller|crime|war|erotic|adult/.test(g))) return false;
+  return genres.some((g) => /family|kids|children/.test(g));
 }
 
 export function profileFromRequest(services: Services, req: Request): StoredProfile | undefined {
@@ -45,7 +50,21 @@ export function titleRoutes(services: Services): Router {
   router.get('/titles/:id', (req, res) => {
     const title = repo.title(param(req, 'id'));
     if (!title) throw notFound('Title');
-    res.json(titleDetail(title, repo.filesOf(title.id), repo.titles(), services.present()));
+    const ctx = services.present();
+    const files = repo.filesOf(title.id);
+    const profile = profileFromRequest(services, req);
+    if (profile?.kids) {
+      // Deep links must not reach what the Kids rows hide.
+      if (!isKidFriendly(titleSummary(title, files, ctx))) throw notFound('Title');
+      const detail = titleDetail(title, files, repo.titles(), ctx);
+      detail.similar = detail.similar.filter((id) => {
+        const other = repo.title(id);
+        return other !== undefined && isKidFriendly(titleSummary(other, repo.filesOf(id), ctx));
+      });
+      res.json(detail);
+      return;
+    }
+    res.json(titleDetail(title, files, repo.titles(), ctx));
   });
 
   router.post('/titles/:id/refresh', async (req, res) => {

@@ -98,7 +98,7 @@ export async function sendFileWithRanges(req: Request, res: Response, file: stri
 
 /** Tracks running ffmpeg streams so they can be capped and cleaned up. */
 export class StreamManager {
-  private readonly active = new Map<number, { child: ChildProcess; key: string; startedAt: number }>();
+  private readonly active = new Map<number, { child: ChildProcess; key: string; owner: string; preview: boolean; startedAt: number }>();
   private readonly stopped = new WeakSet<ChildProcess>();
   private seq = 0;
 
@@ -111,21 +111,34 @@ export class StreamManager {
   /**
    * Pipe a remuxed/transcoded fragmented MP4 to the response.
    * `sessionKey` identifies a viewer+file: a new request for the same key replaces the old stream
-   * (the player restarts the stream on every seek).
+   * (the player restarts the stream on every seek). `owner` is the requesting client: when every slot
+   * is busy, muted previews make room first, then that client's own oldest stream. Someone else's
+   * movie is never stopped; the request is refused instead.
    */
-  stream(req: Request, res: Response, sessionKey: string, opts: StreamArgsOptions): void {
+  stream(
+    req: Request,
+    res: Response,
+    sessionKey: string,
+    opts: StreamArgsOptions,
+    meta: { owner: string; preview?: boolean } = { owner: '' },
+  ): void {
     for (const [id, entry] of this.active) {
       if (entry.key === sessionKey) this.kill(id);
     }
     if (this.active.size >= this.maxConcurrent) {
-      const oldest = [...this.active.entries()].sort((a, b) => a[1].startedAt - b[1].startedAt)[0];
-      if (oldest) this.kill(oldest[0]);
+      const byAge = [...this.active.entries()].sort((a, b) => a[1].startedAt - b[1].startedAt);
+      const victim = byAge.find(([, e]) => e.preview) ?? byAge.find(([, e]) => e.owner === meta.owner) ?? null;
+      if (!victim || (meta.preview && !victim[1].preview)) {
+        res.status(503).setHeader('Retry-After', '30').json({ error: 'The server is busy converting other videos. Try again in a moment.' });
+        return;
+      }
+      this.kill(victim[0]);
     }
     const args = buildStreamArgs(opts);
     log.debug(`ffmpeg ${args.join(' ')}`);
     const child = spawnFfmpeg(this.ffmpeg, args);
     const id = ++this.seq;
-    this.active.set(id, { child, key: sessionKey, startedAt: Date.now() });
+    this.active.set(id, { child, key: sessionKey, owner: meta.owner, preview: Boolean(meta.preview), startedAt: Date.now() });
 
     let stderr = '';
     child.stderr?.on('data', (chunk: Buffer) => {

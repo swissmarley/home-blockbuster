@@ -77,6 +77,8 @@ docker compose up -d
 
 Edit `docker-compose.yml` first: every folder you want to watch must be mounted into the container (for example `/path/to/Movies:/media/movies:ro`). Inside the app, add libraries using the container paths (`/media/movies`). The image includes ffmpeg; data is stored in `./data`.
 
+The server runs as the unprivileged `node` user (uid 1000), so your media must be readable by that user. On start, the container takes ownership of the data folder, which matters when you upgrade from an older image that ran as root. For VAAPI, also add the host's `render` group with `group_add` (see the compose file).
+
 ## Adding your media
 
 Home Blockbuster reads folders **as the server sees them**. Anything the operating system can mount can be a library.
@@ -127,13 +129,17 @@ All settings are optional environment variables (see `.env.example`):
 | `PORT` | `8585` | HTTP port |
 | `HOST` | `0.0.0.0` | Interface to listen on (`127.0.0.1` for this machine only) |
 | `DATA_DIR` | `./data` | Database, artwork cache, thumbnails |
-| `HB_PASSWORD` | – | Require a password to use the app |
+| `HB_PASSWORD` | – | Require a password to use the app (overrides one set in **Settings → Security**) |
+| `TRUST_PROXY` | – | Behind a reverse proxy: trust its `X-Forwarded-*` headers (`1` = one hop, or `loopback`, a subnet…). Needed for per-client sign-in rate limits and `Secure` cookies over HTTPS |
+| `ALLOWED_HOSTS` | – | Without a password, other host names to answer to, comma separated (`media.example.com`, `.example.com`). IPs, `localhost` and LAN names always work |
+| `ALLOW_EXTERNAL_SYMLINKS` | off | Follow symlinks in a library that point outside every library folder |
 | `TMDB_API_KEY`, `OMDB_API_KEY` | – | Metadata API keys (also settable in the UI) |
 | `FFMPEG_PATH`, `FFPROBE_PATH` | auto-detected | Location of ffmpeg / ffprobe |
 | `MEDIA_ROOTS` | – | Extra shortcuts in the folder browser, comma separated (e.g. Docker mounts) |
 | `VAAPI_DEVICE` | `/dev/dri/renderD128` | Render node for VAAPI transcoding |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
-| `TMDB_API_BASE`, `TMDB_IMAGE_BASE`, `IMAGE_PROXY_EXTRA_HOSTS` | – | Advanced: use a TMDB mirror/proxy |
+| `IMAGE_CACHE_MAX_MB` | `2048` | Size cap for downloaded artwork |
+| `TMDB_API_BASE`, `TMDB_IMAGE_BASE`, `IMAGE_PROXY_EXTRA_HOSTS` | – | Advanced: use a TMDB mirror/proxy, or a local stand-in for testing |
 
 Playback, transcoding, hardware acceleration, thumbnails and the automatic scan interval are configured in **Settings → Playback**.
 
@@ -151,9 +157,13 @@ Playback, transcoding, hardware acceleration, thumbnails and the automatic scan 
 
 ## Security
 
-Home Blockbuster is designed for your home network. Anyone who can open it can browse the server's folders (in the folder browser) and watch your media, so:
+Home Blockbuster is designed for your home network. Without a password, anyone who can open it can browse the server's folders (in the folder browser), change libraries and settings, and watch your media, so:
 
-- Set `HB_PASSWORD` if other people share your network, and **never expose it to the internet without a password** — preferably behind a VPN or a reverse proxy with HTTPS.
+- **Set a password** during setup or in **Settings → Security** (or with `HB_PASSWORD`) if other people or untrusted devices share your network. **Never expose it to the internet without one**; ideally use a VPN, or a reverse proxy with HTTPS and `TRUST_PROXY`. Each device signs in once for 30 days. Signing out ends that session, and changing the password signs out every device.
+- Without a password, the server only answers to IP addresses, `localhost` and LAN names, which blocks DNS-rebinding attacks from websites. If you use another host name, add it to `ALLOWED_HOSTS`, or set a password.
+- Symlinks inside a library are only followed when they point into a library folder (or `MEDIA_ROOTS`), so a link dropped into a shared folder can't publish other files on the server. Set `ALLOW_EXTERNAL_SYMLINKS=1` to follow them anyway.
+- The **Kids profile is a filter, not a lock**: it hides titles that aren't rated for children (unrated titles must be tagged family/children) and settings, but anyone can switch profiles.
+- `state.json` in the data folder holds your API keys and the session secret; it is readable by the server's user only.
 - Mount media read-only where you can (the app never writes to your media folders).
 
 ## Development

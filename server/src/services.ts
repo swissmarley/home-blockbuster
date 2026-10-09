@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { AppConfig } from './config.js';
 import { Database } from './db.js';
 import { EventBus } from './events.js';
+import { MediaGuard } from './library/mediaGuard.js';
 import type { PresentContext } from './library/present.js';
 import { LibraryRepo } from './library/repository.js';
 import { Scanner } from './library/scanner.js';
@@ -23,6 +24,8 @@ export interface Services {
   scanner: Scanner;
   events: EventBus;
   streams: StreamManager | null;
+  /** Checks media paths against the library folders before they are read. */
+  guard: MediaGuard;
   cacheDir: string;
   /** Stored settings with environment-provided API keys applied. */
   settings(): SettingsDTO;
@@ -43,6 +46,7 @@ export async function createServices(config: AppConfig, overrides: ServiceOverri
   const repo = new LibraryRepo(db.library);
   const images = new ImageCache(cacheDir);
   await images.init();
+  void images.prune();
   const ffmpeg = overrides.ffmpeg ?? (await detectFfmpeg({ ffmpegPath: config.ffmpegPath, ffprobePath: config.ffprobePath }));
   const events = new EventBus();
 
@@ -60,7 +64,8 @@ export async function createServices(config: AppConfig, overrides: ServiceOverri
   };
 
   const metadata = new MetadataService({ getSettings: settings, fetchJson: overrides.fetchJson });
-  const scanner = new Scanner({ db, repo, images, ffmpeg, metadata, events, settings });
+  const guard = new MediaGuard(() => [...db.state.data.libraries.map((l) => l.path), ...config.mediaRoots], config.allowExternalSymlinks);
+  const scanner = new Scanner({ db, repo, images, ffmpeg, metadata, events, settings, guard });
   const streams = ffmpeg.ffmpeg ? new StreamManager(ffmpeg.ffmpeg) : null;
 
   // A crash mid-scan could leave libraries marked as busy.
@@ -81,6 +86,7 @@ export async function createServices(config: AppConfig, overrides: ServiceOverri
     scanner,
     events,
     streams,
+    guard,
     cacheDir,
     settings,
     onlineLibraries,

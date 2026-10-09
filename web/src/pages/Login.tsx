@@ -49,13 +49,17 @@ export function Login() {
             />
             <label htmlFor="password">Password</label>
           </div>
-          {error ? <p className="login__error">{error}</p> : null}
+          {error ? (
+            <p className="login__error" role="alert">
+              {error}
+            </p>
+          ) : null}
           <button className="btn btn--red login__submit" type="submit" disabled={busy || !password}>
             {busy ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
         <p className="login__hint">
-          This Home Blockbuster server is protected with a password. Ask the person who set it up, or check the <code>HB_PASSWORD</code> setting.
+          This Home Blockbuster server is protected with a password. Ask the person who set it up. It is set in Settings → Security, or with the <code>HB_PASSWORD</code> setting on the server.
         </p>
       </main>
     </div>

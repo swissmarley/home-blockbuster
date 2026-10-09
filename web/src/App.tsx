@@ -54,6 +54,13 @@ function RequireProfile({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Settings are for grown-ups: a Kids profile goes back to browsing. */
+function RequireAdultProfile({ children }: { children: ReactNode }) {
+  const kids = useApp((s) => s.profiles.find((p) => p.id === s.profileId)?.kids ?? false);
+  if (kids) return <Navigate to="/browse" replace />;
+  return <>{children}</>;
+}
+
 function BrowseLayout() {
   return (
     <>
@@ -107,7 +114,14 @@ export function App() {
       <Routes>
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/profiles" element={<ProfileGate />} />
-        <Route path="/profiles/manage" element={<ManageProfiles />} />
+        <Route
+          path="/profiles/manage"
+          element={
+            <RequireAdultProfile>
+              <ManageProfiles />
+            </RequireAdultProfile>
+          }
+        />
         <Route
           path="/watch/:fileId"
           element={
@@ -120,7 +134,9 @@ export function App() {
           path="/settings/*"
           element={
             <RequireProfile>
-              <Settings />
+              <RequireAdultProfile>
+                <Settings />
+              </RequireAdultProfile>
             </RequireProfile>
           }
         />

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Services } from '../services.js';
 import type { ServerEvent, SettingsDTO, SystemInfo } from '../shared/types.js';
+import { authRequired, passwordSource } from './auth.js';
 import { badRequest, body } from './util.js';
 
 const MASK = '••••••••';
@@ -28,7 +29,8 @@ export function systemRoutes(services: Services): Router {
       titleCount: repo.titles().length,
       fileCount: repo.files().length,
       libraryCount: db.state.data.libraries.length,
-      authRequired: Boolean(config.password),
+      authRequired: authRequired(services),
+      authSource: passwordSource(services),
       onboarded: db.state.data.onboarded,
     };
     res.json(info);

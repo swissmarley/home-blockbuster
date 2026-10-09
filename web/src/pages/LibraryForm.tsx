@@ -224,7 +224,7 @@ export function LibraryForm({
         <span className="field-label">What kind of videos are in this folder?</span>
         <div className="segmented">
           {KINDS.map((k) => (
-            <button key={k.value} type="button" className={kind === k.value ? 'is-active' : ''} onClick={() => setKind(k.value)}>
+            <button key={k.value} type="button" className={kind === k.value ? 'is-active' : ''} aria-pressed={kind === k.value} onClick={() => setKind(k.value)}>
               <k.icon />
               <span>
                 <strong>{k.label}</strong>

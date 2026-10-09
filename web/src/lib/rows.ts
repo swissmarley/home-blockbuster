@@ -275,6 +275,9 @@ export function searchTitles(titles: TitleSummary[], query: string): TitleSummar
   const q = norm(query);
   if (!q) return [];
   const tokens = q.split(' ');
+  // One-letter tokens only match the start of a word: "e" shouldn't match every title with an "e" in it.
+  const has = (hay: string, token: string): boolean =>
+    token.length > 1 ? hay.includes(token) : hay.split(' ').some((w) => w.startsWith(token));
   const scored: Array<{ t: TitleSummary; score: number }> = [];
   for (const t of titles) {
     const name = norm(t.name);
@@ -288,11 +291,11 @@ export function searchTitles(titles: TitleSummary[], query: string): TitleSummar
     for (const token of tokens) {
       if (name.split(' ').some((w) => w.startsWith(token))) score += 10;
       if (people.some((p) => p.split(' ').some((w) => w.startsWith(token)))) score += 8;
-      if (genres.some((g) => g.includes(token))) score += 6;
+      if (genres.some((g) => has(g, token))) score += 6;
       if (token.length > 2 && overview.includes(token)) score += 2;
     }
     if (people.some((p) => p === q)) score += 30;
-    if (score > 0 && tokens.every((token) => name.includes(token) || people.some((p) => p.includes(token)) || genres.some((g) => g.includes(token)) || overview.includes(token))) {
+    if (score > 0 && tokens.every((token) => has(name, token) || people.some((p) => has(p, token)) || genres.some((g) => has(g, token)) || has(overview, token))) {
       scored.push({ t, score: score + trendScore(t) / 10 });
     }
   }

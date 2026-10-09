@@ -42,6 +42,9 @@ const EXT_BY_MIME: Record<string, string> = {
 
 const LOCAL_NAME = /^[a-z0-9][a-z0-9_-]{0,120}\.(jpg|png|webp|gif)$/;
 const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_REDIRECTS = 3;
+/** Cap for downloaded artwork; the least recently fetched files go first. */
+const REMOTE_CACHE_MAX_BYTES = (Number(process.env.IMAGE_CACHE_MAX_MB) || 2048) * 1024 * 1024;
 
 export interface CachedImage {
   path: string;
@@ -62,6 +65,8 @@ export class ImageCache {
   private readonly inflight = new Map<string, Promise<CachedImage | null>>();
   private readonly downloads = new Semaphore(6);
   private readonly failures = new Map<string, number>();
+  private downloadedSincePrune = 0;
+  private pruning: Promise<void> | null = null;
 
   constructor(cacheDir: string) {
     this.localDir = path.join(cacheDir, 'images', 'local');
@@ -140,28 +145,98 @@ export class ImageCache {
     return pending;
   }
 
-  private async download(url: string, base: string): Promise<CachedImage | null> {
-    try {
-      const res = await fetch(url, {
-        signal: AbortSignal.timeout(25_000),
+  /** Fetch with redirects followed by hand, so every hop has to pass the host allowlist too. */
+  private async fetchAllowed(url: string, signal: AbortSignal): Promise<{ res: globalThis.Response; finalUrl: string }> {
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const res = await fetch(current, {
+        signal,
+        redirect: 'manual',
         headers: { 'User-Agent': 'HomeBlockbuster/1.0 (+https://github.com/swissmarley/home-blockbuster)' },
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const location = res.headers.get('location');
+      if (res.status < 300 || res.status >= 400 || !location) return { res, finalUrl: current };
+      await res.body?.cancel();
+      const next = new URL(location, current).toString();
+      if (!ImageCache.isAllowedRemote(next)) throw new Error(`Redirect to a host that is not allowed: ${next}`);
+      current = next;
+    }
+    throw new Error('Too many redirects');
+  }
+
+  /** Read a response body, giving up as soon as it grows past MAX_BYTES. */
+  private static async readLimited(res: globalThis.Response): Promise<Buffer> {
+    const declared = Number(res.headers.get('content-length'));
+    if (declared > MAX_BYTES) throw new Error(`Image too large (${declared} bytes)`);
+    if (!res.body) return Buffer.alloc(0);
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+      total += chunk.length;
+      if (total > MAX_BYTES) throw new Error('Image too large');
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+
+  private async download(url: string, base: string): Promise<CachedImage | null> {
+    try {
+      const { res, finalUrl } = await this.fetchAllowed(url, AbortSignal.timeout(25_000));
+      if (!res.ok) {
+        await res.body?.cancel();
+        throw new Error(`HTTP ${res.status}`);
+      }
       const mime = (res.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
-      const ext = EXT_BY_MIME[mime] ?? path.extname(new URL(url).pathname).slice(1).toLowerCase();
-      if (!MIME_BY_EXT[ext]) throw new Error(`Unexpected content type ${mime}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length === 0 || buf.length > MAX_BYTES) throw new Error(`Unexpected size ${buf.length}`);
+      const ext = EXT_BY_MIME[mime] ?? path.extname(new URL(finalUrl).pathname).slice(1).toLowerCase();
+      if (!MIME_BY_EXT[ext]) {
+        await res.body?.cancel();
+        throw new Error(`Unexpected content type ${mime}`);
+      }
+      const buf = await ImageCache.readLimited(res);
+      if (buf.length === 0) throw new Error('Empty image');
       const file = `${base}.${ext}`;
       const tmp = `${file}.${process.pid}.tmp`;
       await fs.writeFile(tmp, buf);
       await fs.rename(tmp, file);
       this.failures.delete(url);
+      if (this.failures.size > 5000) this.failures.clear();
+      if (++this.downloadedSincePrune >= 200) {
+        this.downloadedSincePrune = 0;
+        this.pruning ??= this.prune().finally(() => (this.pruning = null));
+      }
       return { path: file, mime: MIME_BY_EXT[ext]! };
     } catch (err) {
       this.failures.set(url, Date.now());
       log.debug(`Image download failed: ${url}`, err);
       return null;
+    }
+  }
+
+  /** Keep the downloaded-artwork cache under REMOTE_CACHE_MAX_BYTES by deleting the oldest files. */
+  async prune(maxBytes = REMOTE_CACHE_MAX_BYTES): Promise<void> {
+    try {
+      const names = await fs.readdir(this.remoteDir);
+      const files: Array<{ file: string; size: number; mtimeMs: number }> = [];
+      for (const name of names) {
+        const file = path.join(this.remoteDir, name);
+        try {
+          const st = await fs.stat(file);
+          if (st.isFile()) files.push({ file, size: st.size, mtimeMs: st.mtimeMs });
+        } catch {
+          // removed meanwhile
+        }
+      }
+      let total = files.reduce((n, f) => n + f.size, 0);
+      if (total <= maxBytes) return;
+      files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+      for (const f of files) {
+        if (total <= maxBytes * 0.9) break;
+        await fs.rm(f.file, { force: true });
+        total -= f.size;
+      }
+      log.info(`Trimmed the artwork cache to ${Math.round(total / 1024 / 1024)} MB`);
+    } catch (err) {
+      log.warn('Could not trim the artwork cache', err);
     }
   }
 

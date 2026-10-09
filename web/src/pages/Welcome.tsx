@@ -4,11 +4,20 @@ import { api } from '../api/client';
 import { Avatar, AVATARS } from '../components/Avatar';
 import { ChevronRightIcon, CheckIcon } from '../components/Icons';
 import { Logo } from '../components/Logo';
+import { PasswordForm } from '../components/PasswordForm';
 import { useApp } from '../store/app';
 import { LibraryForm } from './LibraryForm';
 import './Welcome.css';
 
-type Step = 'hero' | 'profile' | 'library' | 'scanning';
+type Step = 'hero' | 'profile' | 'security' | 'library' | 'scanning';
+
+const STEPS = ['profile', 'security', 'library', 'scanning'] as const;
+const STEP_LABEL: Record<(typeof STEPS)[number], string> = {
+  profile: 'Your profile',
+  security: 'Password',
+  library: 'Your media',
+  scanning: 'Scan',
+};
 
 /** Decorative wall of "posters" behind the landing hero (no artwork exists yet on first run). */
 function PosterWall() {
@@ -43,6 +52,9 @@ export function Welcome() {
   const [step, setStep] = useState<Step>('hero');
   const [name, setName] = useState(first?.name === 'Me' ? '' : (first?.name ?? ''));
   const [avatar, setAvatar] = useState(first?.avatar ?? 'smile-blue');
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const authSource = useApp((s) => s.system?.authSource ?? null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -56,10 +68,20 @@ export function Welcome() {
 
   const saveProfile = async (): Promise<void> => {
     if (first && (name.trim() || avatar !== first.avatar)) {
-      await api.updateProfile(first.id, { name: name.trim() || first.name, avatar }).catch(() => undefined);
-      await loadProfiles();
+      setSaving(true);
+      setProfileError(null);
+      try {
+        await api.updateProfile(first.id, { name: name.trim() || first.name, avatar });
+        await loadProfiles();
+      } catch (err) {
+        setProfileError(err instanceof Error ? err.message : 'Could not save your profile.');
+        return;
+      } finally {
+        setSaving(false);
+      }
     }
-    setStep('library');
+    // A password set through HB_PASSWORD (or earlier) needs no setup step.
+    setStep(authSource ? 'library' : 'security');
   };
 
   const scanning = Boolean(scan?.running);
@@ -90,12 +112,15 @@ export function Welcome() {
       ) : (
         <main className="welcome__panel">
           <ol className="welcome__steps">
-            {(['profile', 'library', 'scanning'] as const).map((s, i) => (
-              <li key={s} className={step === s ? 'is-active' : ['profile', 'library', 'scanning'].indexOf(step) > i ? 'is-done' : ''}>
-                <span>{['profile', 'library', 'scanning'].indexOf(step) > i ? <CheckIcon /> : i + 1}</span>
-                {s === 'profile' ? 'Your profile' : s === 'library' ? 'Your media' : 'Scan'}
-              </li>
-            ))}
+            {STEPS.map((s, i) => {
+              const done = (STEPS as readonly string[]).indexOf(step) > i;
+              return (
+                <li key={s} className={step === s ? 'is-active' : done ? 'is-done' : ''}>
+                  <span>{done ? <CheckIcon /> : i + 1}</span>
+                  {STEP_LABEL[s]}
+                </li>
+              );
+            })}
           </ol>
 
           {step === 'profile' ? (
@@ -104,17 +129,47 @@ export function Welcome() {
               <p className="welcome__muted">Create your profile. Everyone at home can get their own, each with a personal My List and history.</p>
               <div className="welcome__profile">
                 <Avatar id={avatar} className="welcome__avatar" />
-                <input className="input" placeholder="Your name" value={name} maxLength={30} onChange={(e) => setName(e.target.value)} autoFocus />
+                <input
+                  className="input"
+                  placeholder="Your name"
+                  aria-label="Your name"
+                  value={name}
+                  maxLength={30}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setProfileError(null);
+                  }}
+                  autoFocus
+                />
               </div>
+              {profileError ? (
+                <p className="error-text" role="alert">
+                  {profileError}
+                </p>
+              ) : null}
               <div className="welcome__avatars">
                 {AVATARS.filter((a) => a !== 'kids-rainbow').map((a) => (
-                  <button key={a} className={a === avatar ? 'is-active' : ''} onClick={() => setAvatar(a)} aria-label={a}>
+                  <button key={a} className={a === avatar ? 'is-active' : ''} onClick={() => setAvatar(a)} aria-label={`Avatar: ${a.replace(/-/g, ' ')}`} aria-pressed={a === avatar}>
                     <Avatar id={a} />
                   </button>
                 ))}
               </div>
-              <button className="btn btn--red welcome__next" onClick={() => void saveProfile()}>
+              <button className="btn btn--red welcome__next" disabled={saving} onClick={() => void saveProfile()}>
                 Next
+              </button>
+            </section>
+          ) : null}
+
+          {step === 'security' ? (
+            <section className="welcome__card">
+              <h2>Protect it with a password?</h2>
+              <p className="welcome__muted">
+                Without a password, anyone on your network can open Home Blockbuster, browse the server&apos;s folders and change its settings. Each device
+                signs in once. You can change this later in Settings → Security.
+              </p>
+              <PasswordForm hasPassword={false} submitLabel="Set password & continue" onDone={() => setStep('library')} />
+              <button className="btn btn--grey welcome__next" onClick={() => setStep('library')}>
+                Not now
               </button>
             </section>
           ) : null}

@@ -294,6 +294,7 @@ function LibraryDetails({ detail, onFix, onRefresh, refreshing }: { detail: Titl
 
 function DetailModal({ titleId }: { titleId: string }) {
   const summary = useApp((s) => s.titleMap[titleId]);
+  const profileId = useApp((s) => s.profileId);
   const continueItem = useApp((s) => s.continueItems.find((c) => c.titleId === titleId));
   const toast = useApp((s) => s.toast);
   const close = useCloseTitle();
@@ -309,14 +310,14 @@ function DetailModal({ titleId }: { titleId: string }) {
   useEffect(() => {
     let alive = true;
     api
-      .title(titleId)
+      .title(titleId, profileId)
       .then((d) => alive && setDetail(d))
       .catch((err: Error) => alive && setError(err.message));
     return () => {
       alive = false;
     };
     // Re-fetch when the library changes (e.g. metadata arrived or the title was re-matched).
-  }, [titleId, summary]);
+  }, [titleId, summary, profileId]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setEntered(true));
