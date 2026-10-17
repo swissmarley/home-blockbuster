@@ -218,6 +218,44 @@ describe('libraries and scanning', () => {
     expect(info.next).toMatchObject({ season: 1, episode: 2 });
   });
 
+  it('plays videos that share a name as a movie series, one after another', async () => {
+    await write('Family/We gonna walk with Johnny.mp4', 3000);
+    await write('Family/We gonna walk with Mary.mp4', 2000);
+    await write('Family/Vacation 1.mp4', 1000);
+    await write('Family/Vacation 2.mp4', 1100);
+    const lib = (await call<LibraryDTO>('POST', '/api/libraries', { name: 'Family', path: path.join(media, 'Family'), kind: 'movies' })).data;
+    await services.scanner.whenIdle();
+    const titles = (await call<TitleSummary[]>('GET', '/api/titles')).data.filter((t) => t.libraryIds.includes(lib.id));
+    expect(titles.map((t) => t.name).sort()).toEqual(['Vacation', 'We gonna walk']);
+    const walk = titles.find((t) => t.name === 'We gonna walk')!;
+    expect(walk.kind).toBe('movie');
+    expect(walk.episodeCount).toBe(2);
+
+    const episodes = (await call<TitleDetail>('GET', `/api/titles/${walk.id}`)).data.seasons[0]!.episodes;
+    expect(episodes.map((e) => [e.episode, e.name])).toEqual([
+      [1, 'We gonna walk with Johnny'],
+      [2, 'We gonna walk with Mary'],
+    ]);
+    expect(walk.playFileId).toBe(episodes[0]!.fileId);
+
+    const first = (await call<PlaybackInfo>('GET', `/api/playback/${episodes[0]!.fileId}?caps=h264,aac`)).data;
+    expect(first.episode).toMatchObject({ episode: 1, name: 'We gonna walk with Johnny' });
+    expect(first.next).toMatchObject({ fileId: episodes[1]!.fileId, name: 'We gonna walk with Mary' });
+    expect((await call<PlaybackInfo>('GET', `/api/playback/${episodes[1]!.fileId}?caps=h264,aac`)).data.next).toBeNull();
+
+    const vacation = titles.find((t) => t.name === 'Vacation')!;
+    const parts = (await call<TitleDetail>('GET', `/api/titles/${vacation.id}`)).data.seasons[0]!.episodes;
+    expect(parts.map((e) => e.name)).toEqual(['Part 1', 'Part 2']);
+
+    // Finishing one video puts the next one in Continue Watching.
+    const me = (await call<ProfileDTO[]>('GET', '/api/profiles')).data[0]!;
+    await call('POST', `/api/profiles/${me.id}/progress`, { fileId: episodes[0]!.fileId, position: 595, duration: 600 });
+    const items = (await call<ContinueItem[]>('GET', `/api/profiles/${me.id}/continue`)).data;
+    expect(items.find((i) => i.titleId === walk.id)).toMatchObject({ upNext: true, fileId: episodes[1]!.fileId, episode: { episode: 2 } });
+
+    await call('DELETE', `/api/libraries/${lib.id}`);
+  });
+
   it('removes titles whose files disappeared', async () => {
     await fs.rm(path.join(media, 'Movies/Inception.2010.720p.WEB-DL.mp4'));
     const lib = (await call<LibraryDTO[]>('GET', '/api/libraries')).data.find((l) => l.name === 'Movies')!;

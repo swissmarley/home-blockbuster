@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { imageUrl } from '../media/images.js';
 import { previewUrl } from '../media/playback.js';
 import type {
@@ -10,6 +11,7 @@ import type {
   TitleSummary,
 } from '../shared/types.js';
 import type { StoredFile, StoredSubtitle, StoredTitle } from '../types.js';
+import { titleKey } from './filenameParser.js';
 
 export interface PresentContext {
   /** Library ids that are currently reachable. */
@@ -39,20 +41,65 @@ export function sortEpisodes(files: StoredFile[]): StoredFile[] {
   });
 }
 
-/** Best version of a movie: highest resolution, then first part, then largest. */
-export function bestMovieFile(files: StoredFile[], online?: Set<string>): StoredFile | null {
+/** Highest resolution first, then the largest file; reachable libraries before offline ones. */
+function bestVersion(files: StoredFile[], online?: Set<string>): StoredFile {
   const pool = online ? files.filter((f) => online.has(f.libraryId)) : files;
-  const candidates = pool.length ? pool : files;
-  return (
-    [...candidates].sort((a, b) => {
-      const pa = a.parsed.part ?? 1;
-      const pb = b.parsed.part ?? 1;
-      if (pa !== pb) return pa - pb;
-      const ha = a.probe?.video?.height ?? 0;
-      const hb = b.probe?.video?.height ?? 0;
-      return hb - ha || b.size - a.size;
-    })[0] ?? null
+  return [...(pool.length ? pool : files)].sort((a, b) => {
+    const ha = a.probe?.video?.height ?? 0;
+    const hb = b.probe?.video?.height ?? 0;
+    return hb - ha || b.size - a.size;
+  })[0]!;
+}
+
+/** One video of a movie title: a part, an edition, or another video that shares the title. */
+export interface MovieEntry {
+  /** Copies of the same video (other resolutions, other drives). */
+  files: StoredFile[];
+  best: StoredFile;
+}
+
+/** Same video when the lengths agree; different lengths mean different videos that share a name. */
+function sameVideo(a: StoredFile, b: StoredFile): boolean {
+  const da = a.probe?.duration;
+  const db = b.probe?.duration;
+  if (!da || !db) return true;
+  return Math.abs(da - db) <= Math.max(3, Math.min(da, db) * 0.005);
+}
+
+const entryKey = (f: StoredFile): string =>
+  `${f.parsed.part ?? 1}|${titleKey(f.parsed.edition ?? '')}|${titleKey(f.parsed.episodeTitle ?? '')}`;
+
+/** The videos of a movie title in viewing order. More than one makes it a movie series. */
+export function movieEntries(files: StoredFile[], online?: Set<string>): MovieEntry[] {
+  const ordered = [...files].sort(
+    (a, b) =>
+      (a.parsed.part ?? 1) - (b.parsed.part ?? 1) ||
+      (a.parsed.edition ?? '').localeCompare(b.parsed.edition ?? '') ||
+      (a.parsed.episodeTitle ?? '').localeCompare(b.parsed.episodeTitle ?? '', undefined, { numeric: true }) ||
+      a.relPath.localeCompare(b.relPath, undefined, { numeric: true }),
   );
+  const groups: StoredFile[][] = [];
+  const byKey = new Map<string, StoredFile[][]>();
+  for (const f of ordered) {
+    const key = entryKey(f);
+    const sameKey = byKey.get(key) ?? [];
+    const group = sameKey.find((g) => sameVideo(g[0]!, f));
+    if (group) {
+      group.push(f);
+      continue;
+    }
+    sameKey.push([f]);
+    byKey.set(key, sameKey);
+    groups.push(sameKey[sameKey.length - 1]!);
+  }
+  return groups.map((g) => ({ files: g, best: bestVersion(g, online) }));
+}
+
+/** Best version of a movie: the first video (part), highest resolution, largest. */
+export function bestMovieFile(files: StoredFile[], online?: Set<string>): StoredFile | null {
+  const entries = movieEntries(files, online);
+  const reachable = online ? entries.find((e) => online.has(e.best.libraryId)) : undefined;
+  return (reachable ?? entries[0])?.best ?? null;
 }
 
 export function playFileFor(title: StoredTitle, files: StoredFile[], online?: Set<string>): StoredFile | null {
@@ -73,6 +120,14 @@ export function nextEpisodeFile(files: StoredFile[], currentId: string): StoredF
     if (n.season !== current.season || n.episode !== current.episode) return ordered[i]!;
   }
   return null;
+}
+
+/** What plays after `currentId`: the next episode of a show, or the next video of a movie series. */
+export function nextFileFor(title: StoredTitle, files: StoredFile[], currentId: string, online?: Set<string>): StoredFile | null {
+  if (title.kind === 'show') return nextEpisodeFile(files, currentId);
+  const entries = movieEntries(files, online);
+  const index = entries.findIndex((e) => e.files.some((f) => f.id === currentId));
+  return index >= 0 ? (entries[index + 1]?.best ?? null) : null;
 }
 
 function qualityOf(files: StoredFile[]): Quality | null {
@@ -127,6 +182,58 @@ export function episodeDTO(title: StoredTitle, file: StoredFile): EpisodeDTO {
   };
 }
 
+function cleanStem(file: StoredFile): string {
+  const stem = path.basename(file.relPath, path.extname(file.relPath));
+  return /\s/.test(stem) ? stem : stem.replace(/[._]+/g, ' ').trim();
+}
+
+/** A video of a movie series as an episode: "Part 2", the name it stands for, or its file name. */
+function entryDTO(title: StoredTitle, entries: MovieEntry[], index: number, file?: StoredFile): EpisodeDTO {
+  const entry = entries[index]!;
+  const f = file ?? entry.best;
+  const numbered = entries.some((e) => e.best.parsed.part !== null);
+  const part = f.parsed.part ?? (numbered ? 1 : null);
+  const tagTitle = f.tags?.title && titleKey(f.tags.title) !== titleKey(title.name) ? f.tags.title.trim() : null;
+  const edition = f.parsed.edition;
+  const name =
+    f.parsed.episodeTitle ??
+    tagTitle ??
+    (part !== null && edition ? `Part ${part} · ${edition}` : part !== null ? `Part ${part}` : (edition ?? cleanStem(f)));
+  return {
+    id: f.id,
+    fileId: f.id,
+    season: 1,
+    episode: index + 1,
+    episodeEnd: null,
+    name,
+    overview: f.tags?.description ?? '',
+    still: imageUrl(f.thumb ?? f.cover),
+    runtime: f.probe?.duration ? Math.round(f.probe.duration / 60) : null,
+    airDate: null,
+    duration: f.probe?.duration ?? null,
+  };
+}
+
+/** The episode `file` stands for: a show episode, a video of a movie series, or null for a plain movie. */
+export function episodeFor(title: StoredTitle, files: StoredFile[], file: StoredFile, online?: Set<string>): EpisodeDTO | null {
+  if (title.kind === 'show') return episodeDTO(title, file);
+  const entries = movieEntries(files, online);
+  if (entries.length < 2) return null;
+  const index = entries.findIndex((e) => e.files.some((f) => f.id === file.id));
+  return index >= 0 ? entryDTO(title, entries, index, file) : null;
+}
+
+/** A movie series lists its videos as the episodes of a single season. */
+function movieSeason(title: StoredTitle, entries: MovieEntry[]): SeasonDTO {
+  return {
+    number: 1,
+    name: title.name,
+    overview: '',
+    poster: null,
+    episodes: entries.map((_, i) => entryDTO(title, entries, i)),
+  };
+}
+
 export function seasonsOf(title: StoredTitle, files: StoredFile[]): SeasonDTO[] {
   const bySeason = new Map<number, EpisodeDTO[]>();
   const seen = new Set<string>();
@@ -159,6 +266,7 @@ export function titleSummary(title: StoredTitle, files: StoredFile[], ctx: Prese
   const cover = files.find((f) => f.cover)?.cover ?? null;
   const seasons = new Set<number>();
   const episodes = new Set<string>();
+  const entries = title.kind === 'movie' ? movieEntries(files, ctx.onlineLibraries) : [];
   if (title.kind === 'show') {
     for (const f of files) {
       const { season, episode } = episodeNumbers(f);
@@ -181,7 +289,7 @@ export function titleSummary(title: StoredTitle, files: StoredFile[], ctx: Prese
     maturity: title.maturity,
     runtime: title.runtime ?? durationMinutes,
     seasonCount: title.kind === 'show' ? Math.max(seasons.size, episodes.size ? 1 : 0) : 0,
-    episodeCount: episodes.size,
+    episodeCount: title.kind === 'show' ? episodes.size : entries.length > 1 ? entries.length : 0,
     quality: qualityOf(files),
     images: {
       poster: imageUrl(title.images.poster ?? cover),
@@ -221,6 +329,7 @@ export function similarTitles(title: StoredTitle, all: StoredTitle[], limit = 12
 }
 
 export function titleDetail(title: StoredTitle, files: StoredFile[], all: StoredTitle[], ctx: PresentContext): TitleDetail {
+  const entries = title.kind === 'movie' ? movieEntries(files, ctx.onlineLibraries) : [];
   return {
     ...titleSummary(title, files, ctx),
     tagline: title.tagline,
@@ -229,8 +338,8 @@ export function titleDetail(title: StoredTitle, files: StoredFile[], all: Stored
     writers: title.writers,
     creators: title.creators,
     studios: title.studios,
-    seasons: title.kind === 'show' ? seasonsOf(title, files) : [],
-    files: (title.kind === 'show' ? sortEpisodes(files) : files).map(fileDTO),
+    seasons: title.kind === 'show' ? seasonsOf(title, files) : entries.length > 1 ? [movieSeason(title, entries)] : [],
+    files: (title.kind === 'show' ? sortEpisodes(files) : entries.flatMap((e) => e.files)).map(fileDTO),
     externalIds: title.externalIds,
     similar: similarTitles(title, all),
     locked: title.metadata.locked,

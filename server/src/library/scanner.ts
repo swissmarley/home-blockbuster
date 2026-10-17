@@ -11,7 +11,17 @@ import type { EmbeddedTags, ParsedName, StoredFile, StoredLibrary, StoredTitle }
 import { mapLimit, Semaphore } from '../util/concurrency.js';
 import { hashId } from '../util/ids.js';
 import { createLogger } from '../util/log.js';
-import { cleanTitle, isExtraOrSample, isVideoFile, parseMediaPath, shouldSkipDirectory, sortName, titleKey } from './filenameParser.js';
+import {
+  cleanTitle,
+  groupSeries,
+  isExtraOrSample,
+  isVideoFile,
+  parseMediaPath,
+  shouldSkipDirectory,
+  sortName,
+  titleKey,
+  type SeriesHint,
+} from './filenameParser.js';
 import { episodeKey, episodeNumbers, playFileFor } from './present.js';
 import { probeMedia } from './probe.js';
 import type { MediaGuard } from './mediaGuard.js';
@@ -274,6 +284,9 @@ export class Scanner {
       return;
     }
 
+    // Videos of one folder that belong together ("Vacation 1", "Vacation 2") become one series.
+    const series = groupSeries(found.files.map((f) => ({ rel: f.rel, parsed: parseMediaPath(f.rel, lib.kind) })));
+
     // Probe new / changed files.
     this.setPhase('probing', found.files.length, `Reading ${found.files.length} files`);
     const listDir = async (dir: string): Promise<string[]> => {
@@ -295,7 +308,7 @@ export class Scanner {
       const id = hashId(`${lib.id}:${f.rel}`);
       seen.add(id);
       try {
-        if (await this.processFile(lib, f, id, listDir)) changed++;
+        if (await this.processFile(lib, f, id, listDir, series.get(f.rel))) changed++;
       } catch (err) {
         log.warn(`Failed to process ${f.abs}`, err);
       }
@@ -423,6 +436,7 @@ export class Scanner {
     f: FoundFile,
     id: string,
     listDir: (dir: string) => Promise<string[]>,
+    series?: SeriesHint,
   ): Promise<boolean> {
     const { repo, images, ffmpeg } = this.deps;
     const existing = repo.file(id);
@@ -442,7 +456,17 @@ export class Scanner {
       }
     }
 
-    const parsed = applyEmbeddedHints(parseMediaPath(f.rel, lib.kind), tags, lib.kind);
+    const named = parseMediaPath(f.rel, lib.kind);
+    let parsed = applyEmbeddedHints(named, tags, lib.kind);
+    // Join the series unless embedded tags already gave the video a name of its own.
+    if (series && parsed.kind === 'movie' && parsed.title === named.title) {
+      parsed = {
+        ...parsed,
+        title: series.title,
+        part: series.part ?? parsed.part,
+        episodeTitle: series.episodeTitle ?? parsed.episodeTitle,
+      };
+    }
     const subtitles = [
       ...(await findSidecarSubtitles(f.abs, listDir)),
       ...embeddedSubtitleTracks(probe?.subtitles ?? []),
@@ -716,7 +740,8 @@ export class Scanner {
     if (f.thumb || f.thumbAttempted) return false;
     const t = this.deps.repo.title(f.titleId);
     if (!t) return false;
-    if (t.kind === 'movie') return !t.images.backdrop && !t.images.card;
+    // Every video of a movie series needs its own picture in the episode list.
+    if (t.kind === 'movie') return (!t.images.backdrop && !t.images.card) || this.deps.repo.filesOf(t.id).length > 1;
     const { season, episode } = episodeNumbers(f);
     return !t.episodes[episodeKey(season, episode)]?.still;
   }

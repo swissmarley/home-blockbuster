@@ -8,9 +8,9 @@ export function formatRuntime(minutes: number | null | undefined): string | null
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-/** "2h 14m" for movies, "3 Seasons" / "8 Episodes" for shows. */
+/** "2h 14m" for movies, "3 Seasons" / "8 Episodes" for shows and movie series. */
 export function lengthLabel(t: Pick<TitleSummary, 'kind' | 'runtime' | 'seasonCount' | 'episodeCount'>): string | null {
-  if (t.kind === 'movie') return formatRuntime(t.runtime);
+  if (t.kind === 'movie' && t.episodeCount < 2) return formatRuntime(t.runtime);
   if (t.seasonCount > 1) return `${t.seasonCount} Seasons`;
   if (t.episodeCount > 1) return `${t.episodeCount} Episodes`;
   if (t.episodeCount === 1) return '1 Episode';

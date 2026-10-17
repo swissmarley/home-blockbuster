@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   VIDEO_EXTENSIONS,
   cleanTitle,
+  groupSeries,
   isExtraOrSample,
   isVideoFile,
   parseMediaPath,
@@ -348,4 +349,69 @@ describe('parseMediaPath: Sonarr / Radarr / fansub naming', () => {
     ['Battlestar Galactica (2003)/Season 1/Battlestar.Galactica.S01E01.mkv', 'shows', { title: 'Battlestar Galactica', year: 2003 }],
     ['90210/Season 1/90210 - S01E01.mkv', 'shows', { title: '90210' }],
   ]);
+});
+
+describe('parseMediaPath: numbered videos of a series', () => {
+  check([
+    ['Wedding Episode 3.mp4', 'movies', { kind: 'movie', title: 'Wedding', part: 3 }],
+    ['Wedding Ep 4.mp4', 'movies', { title: 'Wedding', part: 4 }],
+    ['Wedding E05.mp4', 'movies', { title: 'Wedding', part: 5 }],
+    ['Wedding #6.mp4', 'movies', { title: 'Wedding', part: 6 }],
+    ['Wedding_03.mp4', 'movies', { title: 'Wedding', part: 3 }],
+    ['Wedding 1 of 3.mp4', 'movies', { title: 'Wedding', part: 1 }],
+    ['Birthday (2).mp4', 'movies', { title: 'Birthday', part: 2 }],
+    ['Christmas 2019 (2).mp4', 'movies', { title: 'Christmas', year: 2019, part: 2 }],
+    // Camera clips take the folder's name and keep their own as the episode name.
+    ['Family/Christmas 2019/IMG_0001.MOV', 'movies', { title: 'Christmas', year: 2019, episodeTitle: 'Img 0001' }],
+    ['Family/Christmas 2019/VID_20191225_101010.mp4', 'movies', { title: 'Christmas', episodeTitle: 'Vid 20191225 101010' }],
+    ['Family/Christmas 2019/clip_02.mp4', 'movies', { title: 'Christmas', part: 2, episodeTitle: 'Clip 02' }],
+    // Real titles keep their numbers.
+    ['Mission Impossible - 3.mkv', 'movies', { title: 'Mission Impossible - 3', part: null }],
+    ['Agent 007.mkv', 'movies', { title: 'Agent 007', part: null }],
+    ['Episode 3.mp4', 'movies', { title: 'Episode 3', part: null }],
+    ['Kill Bill Vol. 2 (2004).mkv', 'movies', { title: 'Kill Bill Vol. 2', part: null }],
+  ]);
+});
+
+describe('groupSeries', () => {
+  const hints = (...rels: string[]) => {
+    const map = groupSeries(rels.map((rel) => ({ rel, parsed: parseMediaPath(rel, 'movies') })));
+    return rels.map((rel) => map.get(rel) ?? null);
+  };
+
+  it('groups videos that start with the same words under that name', () => {
+    expect(hints('Family/We gonna walk with Johnny.mp4', 'Family/We gonna walk with Mary.mp4', 'Family/We gonna swim.mp4')).toEqual([
+      { title: 'We gonna walk', episodeTitle: 'We gonna walk with Johnny' },
+      { title: 'We gonna walk', episodeTitle: 'We gonna walk with Mary' },
+      null,
+    ]);
+  });
+
+  it('groups numbered siblings and dashed names', () => {
+    expect(hints('Vacation 1.mp4', 'Vacation 2.mp4', 'Vacation 10.mp4')).toEqual([
+      { title: 'Vacation', part: 1 },
+      { title: 'Vacation', part: 2 },
+      { title: 'Vacation', part: 10 },
+    ]);
+    expect(hints('Trip - 1.mp4', 'Trip - 2.mp4')).toEqual([
+      { title: 'Trip', part: 1 },
+      { title: 'Trip', part: 2 },
+    ]);
+    expect(hints('Vacation - Beach.mp4', 'Vacation - Mountains.mp4')).toEqual([
+      { title: 'Vacation', episodeTitle: 'Beach' },
+      { title: 'Vacation', episodeTitle: 'Mountains' },
+    ]);
+  });
+
+  it('keeps sequels and look-alike movies apart', () => {
+    expect(hints('Toy Story.mkv', 'Toy Story 2.mkv', 'Toy Story 3.mkv')).toEqual([null, null, null]);
+    expect(hints("Ocean's 11.mkv", "Ocean's 12.mkv", "Ocean's 13.mkv")).toEqual([null, null, null]);
+    expect(hints('Rocky.mkv', 'Rocky II.mkv', 'Rocky III.mkv')).toEqual([null, null, null]);
+    expect(hints('The Man Who Knew Too Much.mkv', "The Man Who Wasn't There.mkv")).toEqual([null, null]);
+    expect(hints('Love Actually.mkv', 'Love Story.mkv')).toEqual([null, null]);
+    expect(hints('Mission Impossible - 3.mkv', 'Mission Impossible - Fallout (2018).mkv')).toEqual([null, null]);
+    // Different years or folders: separate releases.
+    expect(hints('Harry Potter and the Chamber of Secrets (2002).mkv', 'Harry Potter and the Goblet of Fire (2005).mkv')).toEqual([null, null]);
+    expect(hints('A/We gonna walk with Johnny.mp4', 'B/We gonna walk with Mary.mp4')).toEqual([null, null]);
+  });
 });

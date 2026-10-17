@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Router } from 'express';
-import { episodeDTO, nextEpisodeFile, subtitleTracks, titleSummary } from '../library/present.js';
+import { episodeFor, nextFileFor, subtitleTracks, titleSummary } from '../library/present.js';
 import { decodeSubtitleBuffer, languageInfo, parseSubtitles } from '../library/subtitles.js';
 import { extractSubtitleVtt, grabFrame, keyframeBefore, type StreamArgsOptions } from '../media/ffmpeg.js';
 import { browserAudioIndex, decidePlayback, parseCaps } from '../media/playback.js';
@@ -93,7 +93,8 @@ export function playbackRoutes(services: Services): Router {
     });
     const files = repo.filesOf(title.id);
     const profile = profileFromRequest(services, req);
-    const summary = titleSummary(title, files, services.present());
+    const ctx = services.present();
+    const summary = titleSummary(title, files, ctx);
     if (profile?.kids && !isKidFriendly(summary)) throw new ApiError(403, 'This title is not available on a Kids profile.');
     const progress = profile?.state.progress[file.id];
     const duration = file.probe?.duration ?? progress?.duration ?? null;
@@ -101,7 +102,8 @@ export function playbackRoutes(services: Services): Router {
     if (progress && !progress.finished && progress.position > 15 && (!duration || progress.position < duration - 20)) {
       resumeAt = progress.position;
     }
-    const next = title.kind === 'show' ? nextEpisodeFile(files, file.id) : null;
+    const online = ctx.onlineLibraries;
+    const next = nextFileFor(title, files, file.id, online);
     const url =
       decision.mode === 'direct'
         ? `/api/stream/${file.id}`
@@ -111,8 +113,8 @@ export function playbackRoutes(services: Services): Router {
       fileId: file.id,
       titleId: title.id,
       title: summary,
-      episode: title.kind === 'show' ? episodeDTO(title, file) : null,
-      next: next ? episodeDTO(title, next) : null,
+      episode: episodeFor(title, files, file, online),
+      next: next ? episodeFor(title, files, next, online) : null,
       mode: decision.mode,
       url,
       canTranscode: Boolean(services.streams) && settings.transcoding,
