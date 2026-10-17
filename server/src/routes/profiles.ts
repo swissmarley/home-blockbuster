@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { newProfile } from '../db.js';
-import { episodeDTO, nextEpisodeFile, titleSummary } from '../library/present.js';
+import { episodeFor, nextFileFor, titleSummary } from '../library/present.js';
 import type { Services } from '../services.js';
 import type { ContinueItem, ProfileDTO, ProgressEntry, ThumbRating } from '../shared/types.js';
 import type { StoredProfile } from '../types.js';
@@ -170,12 +170,13 @@ export function profileRoutes(services: Services): Router {
           position: entry.position,
           duration: entry.duration,
           progress: entry.duration ? Math.min(1, entry.position / entry.duration) : 0,
-          episode: title.kind === 'show' ? episodeDTO(title, file) : null,
+          episode: episodeFor(title, files, file, ctx.onlineLibraries),
           updatedAt: entry.updatedAt,
           upNext: false,
         });
-      } else if (title.kind === 'show') {
-        const next = nextEpisodeFile(files, entry.fileId);
+      } else {
+        // Up next: the following episode of a show or video of a movie series.
+        const next = nextFileFor(title, files, entry.fileId, ctx.onlineLibraries);
         const nextProgress = next ? profile.state.progress[next.id] : undefined;
         if (next && !nextProgress?.finished) {
           const duration = next.probe?.duration ?? nextProgress?.duration ?? 0;
@@ -186,7 +187,7 @@ export function profileRoutes(services: Services): Router {
             position,
             duration,
             progress: duration ? Math.min(1, position / duration) : 0,
-            episode: episodeDTO(title, next),
+            episode: episodeFor(title, files, next, ctx.onlineLibraries),
             updatedAt: entry.updatedAt,
             upNext: true,
           });

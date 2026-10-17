@@ -69,6 +69,7 @@ export interface TitleSummary {
   /** Minutes: movie runtime or typical episode runtime. */
   runtime: number | null;
   seasonCount: number;
+  /** Show episodes, or the videos of a movie series (0 for a single movie). */
   episodeCount: number;
   quality: Quality | null;
   images: ImageSet;

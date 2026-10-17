@@ -20,6 +20,7 @@ Point it at your folders. It finds your videos, reads the tags and cover art emb
 - Libraries for movies, TV shows or mixed folders on local disks, external/USB drives, mounted NAS shares (SMB/CIFS, NFS), Windows UNC paths (`\\NAS\Movies`) and Docker volumes.
 - A built-in folder browser that shows drives, `/Volumes`, `/mnt`, `/media`, home folders and custom roots, with a reachability check before you save.
 - Understands Plex/Jellyfin naming, scene releases, anime, daily shows, multi-episode files, editions, parts and IMDb/TMDB ids in names. Skips samples, extras and NAS system folders (`@eaDir`, `#recycle`…).
+- **Movie series**: videos that belong together — parts, editions, numbered clips or names that start the same — are shown as one title with an episode list, and play one after another.
 - Incremental rescans (only new or changed files are read) and automatic scheduled scans.
 - **Offline-safe**: if a drive or share is disconnected, its titles are kept and the library is marked offline instead of being wiped.
 - Read-only: your files are never moved, renamed or modified.
@@ -108,6 +109,22 @@ Subtitles next to the video: Inception (2010).en.srt, Inception (2010).de.forced
 ```
 
 Choose the library type (**Movies**, **TV Shows** or **Mixed**) when adding a folder — it helps with ambiguous names. If something is matched wrongly, open the title and use **Fix match**.
+
+#### Movie series (home videos, multi-part films)
+
+Videos in the **same folder** (and with the same year, or none) that belong together become one title, listed like the episodes of a series. When one ends, the next one starts automatically.
+
+```
+Family/We gonna walk with Johnny.mp4      ┐ "We gonna walk": names that start with the
+Family/We gonna walk with Mary.mp4        ┘ same words (at least two meaningful ones)
+Family/Vacation 1.mp4, Vacation 2.mp4       "Vacation": numbered from 1 (also "Vacation - 1")
+Family/Vacation - Beach.mp4, Vacation - Mountains.mp4
+Family/Wedding Part 1.mp4, Wedding E02.mp4, Wedding #3.mp4, Wedding 1 of 3.mp4, Wedding_04.mp4
+Family/Christmas 2019/IMG_0001.MOV …       camera clips take the folder's name
+Movies/Some Movie (2010) - Extended.mkv     editions and parts of a movie
+```
+
+Sequels keep their own titles: numbers that don't start at 1 (`Toy Story 2`, `Ocean's 12`), roman numerals (`Rocky II`), different years, and names that only share filler words (`The Man Who…`) are not grouped. Copies of the same video (another resolution or drive) stay versions of one entry.
 
 ## Metadata providers
 

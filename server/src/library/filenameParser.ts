@@ -370,6 +370,35 @@ function extractPart(s: string, allowPartWord: boolean): { text: string; part: n
 }
 
 // ---------------------------------------------------------------------------
+// Numbered videos of one series: "Wedding Episode 3", "Wedding_03", "Birthday (2)"
+// ---------------------------------------------------------------------------
+
+const SEQUENCE_RES: readonly RegExp[] = [
+  // Copy numbering: "Birthday (2)".
+  /[ ._-]*\((\d{1,2})\)$/u,
+  /[ ._-]+(?:episode|episodio|épisode|folge|ep|e|chapter|chapitre|kapitel|capitolo|chap|ch|teil|parte|partie)[ ._-]*#?(\d{1,3})$/iu,
+  /[ ._-]*#(\d{1,3})$/u,
+  // "Wedding 1 of 3".
+  /[ ._-]+(\d{1,3})[ ._-]*(?:of|von|de|di|sur)[ ._-]*\d{1,3}$/iu,
+  // Zero-padded counters: "Wedding_03", "Wedding 03".
+  /[ _-](0\d)$/u,
+];
+
+/** A trailing sequence number on a movie-style name; the rest must still read as a title. */
+function extractSequence(stem: string): { text: string; part: number | null } {
+  const s = stem.trim();
+  if (/^vts[ _-]?\d/i.test(s)) return { text: stem, part: null };
+  for (const re of SEQUENCE_RES) {
+    const m = re.exec(s);
+    if (!m) continue;
+    const n = Number(m[1]);
+    const text = s.slice(0, m.index);
+    if (n >= 1 && /\p{L}/u.test(text)) return { text, part: n };
+  }
+  return { text: stem, part: null };
+}
+
+// ---------------------------------------------------------------------------
 // Resolution
 // ---------------------------------------------------------------------------
 
@@ -698,9 +727,10 @@ const GENERIC_NAMES: ReadonlySet<string> = new Set([
   'usenet', 'plex', 'jellyfin', 'emby', 'kodi', 'share', 'shared', 'public', 'data', 'nas', 'home', 'users',
   'misc', 'other', 'others', 'multimedia', 'recordings', 'recorded tv', 'dvr',
   // Generic file names (disc rips, camera files, placeholders).
-  'title', 'main', 'feature', 'main feature', 'main movie', 'index', 'bdmv', 'stream', 'episode',
+  'title', 'main', 'feature', 'main feature', 'main movie', 'index', 'bdmv', 'stream', 'episode', 'clip', 'clips',
 ]);
-const GENERIC_NAME_RE = /^(?:vts(?: \d+)+|(?:title )?t\d{1,3}|title \d{1,3}|\d{5,}|0\d*)$/;
+const GENERIC_NAME_RE =
+  /^(?:vts(?: \d+)+|(?:title )?t\d{1,3}|title \d{1,3}|\d{5,}|0\d*|(?:img|vid|mvi|mov|dsc[nf]?|gopr|gp|gx|pxl|dji|mah|clip|video|movie|trim)(?: ?\d+)+(?: (?:mp|lv|hdr|edit|edited|trim))*)$/;
 
 function isGenericName(title: string): boolean {
   const key = titleKey(title);
@@ -1099,15 +1129,20 @@ function parsePath(relPath: string, libraryKind: LibraryKind): ParsedName {
     };
   }
 
-  const file = analyzeTitle(stem, { sceneStyle });
+  const sequence = extractSequence(stem);
+  const file = analyzeTitle(sequence.text, { sceneStyle });
   const folder = layout.movieDir >= 0 ? movieFolderTitle(dirs[layout.movieDir]) : null;
   let title = file.title;
   let year = file.year;
+  let episodeTitle: string | null = null;
   if (folder) {
     const similar = file.title !== '' && similarTitles(file.title, folder.title);
     if (file.title === '' || isGenericName(file.title)) {
       title = folder.title;
       year = folder.year ?? file.year;
+      // Camera clips and disc rips in one folder: keep each file's own name to tell them apart.
+      const own = sequence.part !== null ? analyzeTitle(stem, { sceneStyle }).title : file.title;
+      if (own !== '') episodeTitle = own;
     } else if (similar && folder.year !== null && (file.year === null || file.year === folder.year)) {
       // Same movie: the folder name is usually the curated one (casing, punctuation, year).
       title = folder.title;
@@ -1119,7 +1154,132 @@ function parsePath(relPath: string, libraryKind: LibraryKind): ParsedName {
     kind: 'movie',
     title: title || 'Unknown',
     year,
+    episodeTitle,
     edition: tagEdition ?? file.edition ?? folder?.edition ?? null,
-    part: file.part ?? layout.folderPart,
+    part: file.part ?? sequence.part ?? layout.folderPart,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Movie series: videos in one folder that belong together
+// ---------------------------------------------------------------------------
+
+/** How a file's parsed name changes when it joins a series of videos. */
+export interface SeriesHint {
+  title: string;
+  part?: number;
+  episodeTitle?: string;
+}
+
+/** Words that never carry a series name on their own ("The Man Who …" is not a series). */
+const CONNECTOR_WORDS = new Set(
+  (
+    'a an the and or of with without to for from by at in on into about vs ' +
+    'i you he she it we they me my your his her its our their who what where when why how that this these those is are was were be ' +
+    'und mit der die das den dem des ein eine von vom zum zur im am an auf ' +
+    'et avec le la les l un une du des de au aux en sur ' +
+    'e con il lo gli i una di da del della dei nel per su'
+  ).split(' '),
+);
+const ROMAN_RE = /^[ivxlcdm]+$/;
+const COUNTER_RE = /^(?:\d+|[ivxlcdm]+)$/;
+
+const dirOf = (rel: string): string => pathSegments(rel).slice(0, -1).join('/');
+
+/**
+ * Groups movie-style videos of one folder into series, so they play like episodes:
+ * - numbered siblings starting at 1: "Vacation 1", "Vacation 2"
+ * - a shared name before a dash: "Vacation - Beach", "Vacation - Mountains"
+ * - a shared beginning of at least two meaningful words:
+ *   "We gonna walk with Johnny", "We gonna walk with Mary" -> "We gonna walk"
+ * Only videos with the same year (or none) group, so separately released movies stay apart.
+ */
+export function groupSeries(items: ReadonlyArray<{ rel: string; parsed: ParsedName }>): Map<string, SeriesHint> {
+  const hints = new Map<string, SeriesHint>();
+  const buckets = new Map<string, Array<{ rel: string; parsed: ParsedName }>>();
+  for (const item of items) {
+    if (item.parsed.kind !== 'movie') continue;
+    const key = `${dirOf(item.rel)}|${item.parsed.year ?? ''}`;
+    const list = buckets.get(key) ?? [];
+    list.push(item);
+    buckets.set(key, list);
+  }
+
+  for (const bucket of buckets.values()) {
+    if (bucket.length < 2) continue;
+
+    // 1. "Vacation 1", "Vacation - 2": a bare trailing number only counts when the numbering starts at 1,
+    //    so sequels ("Toy Story 2", "Ocean's 12", "Mission Impossible - 3") stay separate movies.
+    const numbered = new Map<string, Array<{ rel: string; base: string; n: number }>>();
+    for (const { rel, parsed } of bucket) {
+      if (parsed.part !== null) continue;
+      const m = /^(.*\p{L}.*?)(?:\s+[-–—])?\s+(\d{1,3})$/u.exec(parsed.title);
+      if (!m) continue;
+      const base = m[1]!.trim();
+      const list = numbered.get(titleKey(base)) ?? [];
+      list.push({ rel, base, n: Number(m[2]) });
+      numbered.set(titleKey(base), list);
+    }
+    for (const list of numbered.values()) {
+      const numbers = new Set(list.map((x) => x.n));
+      if (numbers.size < 2 || Math.min(...numbers) > 1) continue;
+      for (const x of list) hints.set(x.rel, { title: list[0]!.base, part: x.n });
+    }
+
+    // 2. "Vacation - Beach", "Vacation - Mountains".
+    const dashed = new Map<string, Array<{ rel: string; base: string; rest: string }>>();
+    for (const { rel, parsed } of bucket) {
+      if (hints.has(rel)) continue;
+      const m = /^(.*?\p{L}.*?)\s+[-–—:]\s+(.*\p{L}.*)$/u.exec(parsed.title);
+      if (!m) continue;
+      const base = m[1]!.trim();
+      const list = dashed.get(titleKey(base)) ?? [];
+      list.push({ rel, base, rest: m[2]!.trim() });
+      dashed.set(titleKey(base), list);
+    }
+    for (const list of dashed.values()) {
+      if (list.length < 2) continue;
+      for (const x of list) hints.set(x.rel, { title: list[0]!.base, episodeTitle: x.rest });
+    }
+
+    // 3. A shared beginning: "We gonna walk with Johnny", "We gonna walk with Mary".
+    const rest = bucket
+      .filter((x) => !hints.has(x.rel))
+      .map((x) => {
+        const words = x.parsed.title.split(/\s+/).filter(Boolean);
+        return { ...x, words, keys: words.map((w) => titleKey(w)) };
+      })
+      .sort((a, b) => a.keys.join(' ').localeCompare(b.keys.join(' ')));
+    // Longest shared beginnings come from neighbours in sorted order.
+    const candidates = new Map<string, string[]>();
+    for (let i = 1; i < rest.length; i++) {
+      const a = rest[i - 1]!;
+      const b = rest[i]!;
+      let n = 0;
+      while (n < a.keys.length && n < b.keys.length && a.keys[n] === b.keys[n]) n++;
+      // Never end on a connector or a number: "We gonna walk with" -> "We gonna walk".
+      while (n > 0 && (CONNECTOR_WORDS.has(a.keys[n - 1]!) || !/\p{L}/u.test(a.keys[n - 1]!) || COUNTER_RE.test(a.keys[n - 1]!))) n--;
+      const meaningful = a.keys.slice(0, n).filter((k) => /\p{L}/u.test(k) && !CONNECTOR_WORDS.has(k) && !ROMAN_RE.test(k));
+      if (meaningful.length < 2) continue;
+      const prefix = a.keys.slice(0, n);
+      candidates.set(prefix.join(' '), prefix);
+    }
+    const taken = new Set<string>();
+    for (const prefix of [...candidates.values()].sort((a, b) => b.length - a.length)) {
+      const members = rest.filter((x) => {
+        if (taken.has(x.rel) || x.keys.length < prefix.length) return false;
+        if (!prefix.every((k, i) => x.keys[i] === k)) return false;
+        // The part after the series name has to name something ("Rocky II" is a sequel, not an episode).
+        const tail = x.keys.slice(prefix.length);
+        return tail.length === 0 || tail.some((k) => /\p{L}/u.test(k) && !COUNTER_RE.test(k));
+      });
+      if (members.length < 2 || members.every((x) => x.keys.length === prefix.length)) continue;
+      const title = members[0]!.words.slice(0, prefix.length).join(' ');
+      for (const x of members) {
+        taken.add(x.rel);
+        hints.set(x.rel, { title, episodeTitle: x.parsed.title });
+      }
+    }
+  }
+  return hints;
 }

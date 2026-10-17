@@ -470,7 +470,7 @@ function DetailModal({ titleId }: { titleId: string }) {
             </div>
           </div>
 
-          {detail && detail.kind === 'show' && detail.seasons.length ? (
+          {detail && detail.seasons.length ? (
             <Episodes key={detail.id} detail={detail} initialSeason={initialSeason} currentFileId={continueItem?.fileId ?? null} />
           ) : null}
           {detail ? <MoreLikeThis ids={detail.similar} /> : null}
