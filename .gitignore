@@ -10,3 +10,8 @@ test-media/
 Thumbs.db
 .vscode/
 .idea/
+
+# iOS
+ios/build/
+xcuserdata/
+*.xcarchive

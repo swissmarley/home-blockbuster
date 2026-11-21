@@ -66,6 +66,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     log.info(`${signal} received, shutting down…`);
     services.streams?.killAll();
+    services.hls?.killAll();
     server.close();
     server.closeAllConnections();
     await db.flush();

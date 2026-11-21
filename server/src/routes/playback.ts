@@ -1,10 +1,11 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { episodeFor, nextFileFor, subtitleTracks, titleSummary } from '../library/present.js';
 import { decodeSubtitleBuffer, languageInfo, parseSubtitles } from '../library/subtitles.js';
 import { extractSubtitleVtt, grabFrame, keyframeBefore, type StreamArgsOptions } from '../media/ffmpeg.js';
 import { browserAudioIndex, decidePlayback, parseCaps } from '../media/playback.js';
+import { HLS_FILE, HLS_SESSION } from '../media/hls.js';
 import { contentTypeFor, sendFileWithRanges } from '../media/stream.js';
 import type { Services } from '../services.js';
 import type { AudioTrack, PlaybackInfo, SubtitleCue } from '../shared/types.js';
@@ -104,11 +105,12 @@ export function playbackRoutes(services: Services): Router {
     }
     const online = ctx.onlineLibraries;
     const next = nextFileFor(title, files, file.id, online);
-    const url =
-      decision.mode === 'direct'
-        ? `/api/stream/${file.id}`
-        : `/api/stream/${file.id}/live?mode=${decision.mode}&audio=${decision.audioIndex ?? -1}&copyAudio=${decision.copyAudio ? 1 : 0}` +
-          `&v=${decision.videoTarget}&a=${decision.audioTarget}`;
+    const streamQuery =
+      `mode=${decision.mode}&audio=${decision.audioIndex ?? -1}&copyAudio=${decision.copyAudio ? 1 : 0}` +
+      `&v=${decision.videoTarget}&a=${decision.audioTarget}`;
+    const url = decision.mode === 'direct' ? `/api/stream/${file.id}` : `/api/stream/${file.id}/live?${streamQuery}`;
+    const hlsUrl =
+      decision.mode !== 'direct' && services.hls ? `/api/stream/${file.id}/hls/{session}/index.m3u8?${streamQuery}` : null;
     const info: PlaybackInfo = {
       fileId: file.id,
       titleId: title.id,
@@ -117,6 +119,7 @@ export function playbackRoutes(services: Services): Router {
       next: next ? episodeFor(title, files, next, online) : null,
       mode: decision.mode,
       url,
+      hlsUrl,
       canTranscode: Boolean(services.streams) && settings.transcoding,
       duration,
       subtitles: subtitleTracks(file.subtitles),
@@ -133,11 +136,8 @@ export function playbackRoutes(services: Services): Router {
     await sendFileWithRanges(req, res, await mediaPath(file), contentTypeFor(file.ext));
   });
 
-  router.get('/stream/:fileId/live', async (req, res) => {
-    const streams = services.streams;
-    if (!streams) throw new ApiError(503, 'Transcoding requires ffmpeg on the server.');
-    const file = fileOr404(param(req, 'fileId'));
-    const input = await mediaPath(file);
+  /** ffmpeg options for a live remux/transcode from the stream query (`mode`, `audio`, `start`…). */
+  const liveOptions = (req: Request, file: StoredFile, input: string): StreamArgsOptions => {
     const probe = file.probe;
     const duration = probe?.duration ?? Number.POSITIVE_INFINITY;
     const start = Math.min(Math.max(0, queryNumber(req, 'start') ?? 0), Math.max(0, duration - 1));
@@ -148,10 +148,7 @@ export function playbackRoutes(services: Services): Router {
     else if (requested !== undefined && requested >= 0 && requested < audioCount) audioIndex = requested;
     else audioIndex = audioCount > 0 ? browserAudioIndex(probe?.audio ?? []) : null;
     const settings = services.settings();
-    // Keyed by client address too, so one device's previews or seeks never replace another device's stream.
-    const owner = req.ip ?? 'anon';
-    const session = (queryString(req, 'session') ?? 'main').slice(0, 64);
-    const opts: StreamArgsOptions = {
+    return {
       input,
       start,
       mode: req.query.mode === 'transcode' ? 'transcode' : 'remux',
@@ -165,7 +162,53 @@ export function playbackRoutes(services: Services): Router {
       videoTarget: req.query.v === 'vp9' ? 'vp9' : 'h264',
       audioTarget: req.query.a === 'opus' ? 'opus' : 'aac',
     };
+  };
+
+  router.get('/stream/:fileId/live', async (req, res) => {
+    const streams = services.streams;
+    if (!streams) throw new ApiError(503, 'Transcoding requires ffmpeg on the server.');
+    const file = fileOr404(param(req, 'fileId'));
+    const opts = liveOptions(req, file, await mediaPath(file));
+    // Keyed by client address too, so one device's previews or seeks never replace another device's stream.
+    const owner = req.ip ?? 'anon';
+    const session = (queryString(req, 'session') ?? 'main').slice(0, 64);
     streams.stream(req, res, `${owner}|${session}:${file.id}`, opts, { owner, preview: session === 'preview' });
+  });
+
+  /** HLS variant of the live stream, for AVPlayer. Each session id is one ffmpeg run from `start`. */
+  router.get('/stream/:fileId/hls/:session/index.m3u8', async (req, res) => {
+    const hls = services.hls;
+    if (!hls) throw new ApiError(503, 'Transcoding requires ffmpeg on the server.');
+    const file = fileOr404(param(req, 'fileId'));
+    const sessionId = param(req, 'session');
+    if (!HLS_SESSION.test(sessionId)) throw new ApiError(400, 'Invalid session');
+    const owner = req.ip ?? 'anon';
+    let session = hls.get(owner, sessionId, file.id);
+    if (!session) {
+      session = (await hls.start(owner, sessionId, file.id, liveOptions(req, file, await mediaPath(file)))) ?? undefined;
+      if (!session) {
+        res.status(503).setHeader('Retry-After', '30').json({ error: 'The server is busy converting other videos. Try again in a moment.' });
+        return;
+      }
+    }
+    const text = await hls.playlist(session);
+    if (text === null) throw new ApiError(500, hls.error(session) ?? 'The video could not be converted in time.');
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(text);
+  });
+
+  router.get('/stream/:fileId/hls/:session/:name', async (req, res) => {
+    const hls = services.hls;
+    if (!hls) throw new ApiError(503, 'Transcoding requires ffmpeg on the server.');
+    const name = param(req, 'name');
+    if (!HLS_FILE.test(name)) throw notFound('Segment');
+    const session = hls.get(req.ip ?? 'anon', param(req, 'session'), param(req, 'fileId'));
+    if (!session) throw new ApiError(410, 'This stream has ended. Start playback again.');
+    const segment = await hls.segment(session, name);
+    if (!segment) throw notFound('Segment');
+    res.setHeader('Cache-Control', 'no-store');
+    res.type(name.endsWith('.mp4') ? 'video/mp4' : 'video/iso.segment').sendFile(segment);
   });
 
   /** Remuxed streams can only start on a keyframe; the player asks where the nearest one is. */

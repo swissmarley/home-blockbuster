@@ -216,3 +216,31 @@ describe('buildStreamArgs', () => {
     expect(args).toContain('-tag:v hvc1');
   });
 });
+
+describe('buildHlsArgs', () => {
+  it('writes an fMP4 event playlist with the same codec choices as the pipe', async () => {
+    const { buildHlsArgs } = await import('../src/media/hls.js');
+    const args = buildHlsArgs(
+      {
+        input: '/media/a.mkv',
+        start: 30,
+        mode: 'remux',
+        audioIndex: 0,
+        copyAudio: true,
+        videoCodec: 'hevc',
+        sourceHeight: 1080,
+        maxHeight: 1080,
+        hwAccel: 'none',
+        encoders: new Set(),
+      },
+      '/tmp/hls-x',
+    );
+    expect(args.join(' ')).toContain('-ss 30.000 -i /media/a.mkv');
+    expect(args).toContain('hvc1');
+    expect(args.join(' ')).toContain('-f hls');
+    expect(args.join(' ')).toContain('-hls_playlist_type event');
+    expect(args.join(' ')).toContain('-hls_segment_type fmp4');
+    expect(args.at(-1)).toBe('/tmp/hls-x/index.m3u8');
+    expect(args).not.toContain('pipe:1');
+  });
+});
