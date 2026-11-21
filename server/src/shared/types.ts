@@ -185,6 +185,11 @@ export interface PlaybackInfo {
   mode: PlaybackMode;
   /** Direct: final URL. Remux/transcode: base URL; the client appends `start` (seconds). */
   url: string;
+  /**
+   * Remux/transcode as HLS (for AVPlayer): replace `{session}` with a fresh id for every start and
+   * append `start` (seconds). Null for direct play or when the server can't convert.
+   */
+  hlsUrl?: string | null;
   canTranscode: boolean;
   /** Seconds. */
   duration: number | null;

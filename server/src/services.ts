@@ -8,6 +8,7 @@ import type { PresentContext } from './library/present.js';
 import { LibraryRepo } from './library/repository.js';
 import { Scanner } from './library/scanner.js';
 import { detectFfmpeg, type FfmpegInfo } from './media/ffmpeg.js';
+import { HlsManager } from './media/hls.js';
 import { ImageCache } from './media/images.js';
 import { StreamManager } from './media/stream.js';
 import { MetadataService } from './metadata/service.js';
@@ -24,6 +25,8 @@ export interface Services {
   scanner: Scanner;
   events: EventBus;
   streams: StreamManager | null;
+  /** HLS sessions for players that can't play the fragmented-MP4 pipe (iOS). */
+  hls: HlsManager | null;
   /** Checks media paths against the library folders before they are read. */
   guard: MediaGuard;
   cacheDir: string;
@@ -67,6 +70,7 @@ export async function createServices(config: AppConfig, overrides: ServiceOverri
   const guard = new MediaGuard(() => [...db.state.data.libraries.map((l) => l.path), ...config.mediaRoots], config.allowExternalSymlinks);
   const scanner = new Scanner({ db, repo, images, ffmpeg, metadata, events, settings, guard });
   const streams = ffmpeg.ffmpeg ? new StreamManager(ffmpeg.ffmpeg) : null;
+  const hls = ffmpeg.ffmpeg ? new HlsManager(ffmpeg.ffmpeg, cacheDir) : null;
 
   // A crash mid-scan could leave libraries marked as busy.
   for (const lib of db.state.data.libraries) {
@@ -86,6 +90,7 @@ export async function createServices(config: AppConfig, overrides: ServiceOverri
     scanner,
     events,
     streams,
+    hls,
     guard,
     cacheDir,
     settings,

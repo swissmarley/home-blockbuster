@@ -314,7 +314,8 @@ function videoEncoderArgs(opts: StreamArgsOptions): { pre: string[]; args: strin
   };
 }
 
-export function buildStreamArgs(opts: StreamArgsOptions): string[] {
+/** Input, mapping and codec arguments shared by the fragmented-MP4 pipe and HLS output. */
+export function buildCodecArgs(opts: StreamArgsOptions): string[] {
   const video = opts.mode === 'transcode' ? videoEncoderArgs(opts) : { pre: [], args: ['-c:v', 'copy'] };
   const args = ['-hide_banner', '-loglevel', 'error', '-nostdin', ...video.pre];
   if (opts.start > 0) args.push('-ss', opts.start.toFixed(3));
@@ -331,12 +332,18 @@ export function buildStreamArgs(opts: StreamArgsOptions): string[] {
     '-sn', '-dn',
     '-map_metadata', '-1', '-map_chapters', '-1',
     '-max_muxing_queue_size', '2048',
+  );
+  return args;
+}
+
+export function buildStreamArgs(opts: StreamArgsOptions): string[] {
+  return [
+    ...buildCodecArgs(opts),
     '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
     '-frag_duration', '2000000',
     '-f', 'mp4',
     'pipe:1',
-  );
-  return args;
+  ];
 }
 
 export function spawnFfmpeg(ffmpeg: string, args: string[]): ChildProcess {
