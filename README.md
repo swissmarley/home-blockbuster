@@ -108,6 +108,38 @@ Enter keys in **Settings → Metadata & Artwork**, or set `TMDB_API_KEY` / `OMDB
 
 **Publishing (maintainers):** pushing a `v*.*.*` tag runs `.github/workflows/publish.yml`, which tests the code, pushes the multi-arch image to GitHub Container Registry (tags `1.2.3`, `1.2`, `latest`; every push to `main` updates `edge`) and attaches `install.sh`, `docker-compose.yml` and `Caddyfile` to a GitHub Release. Make the package public once under the repository's **Packages** settings so anyone can pull it.
 
+### Upgrading an existing Docker server to HTTPS
+
+If you already run Home Blockbuster from a clone of this repository (the old `docker-compose.yml` that published port 8585), `git pull` and `docker compose build` are not enough: the compose file now also starts Caddy and reads its settings from `.env`.
+
+1. **Update the code.** If you edited `docker-compose.yml` (for example the media paths), save your changes first with `git stash`, then `git pull`. Do not re-apply the old file: its folder paths now live in `.env`.
+2. **Create `.env`.** Copy `.env.docker.example` to `.env` and set:
+   - `HB_DOMAIN`: the name or IP you open the app with. Devices must use one of these exactly; list several separated by commas, e.g. `nas.local, 192.168.1.20`.
+   - `HB_MOVIES_DIR` and `HB_TV_DIR`: your folders (the old `/path/to/Movies` and `/path/to/TV Shows` lines).
+   - `HB_PASSWORD`, if you want one. `HB_TLS` stays `internal` for a LAN, or set your e-mail for a public domain (see the table above).
+   - `HB_HTTP_PORT` and `HB_HTTPS_PORT`, only if ports 80 and 443 are already used on the machine (many NAS web interfaces use them). Then open the app with the port, e.g. `https://nas.local:8443`.
+3. **Re-add other folders.** USB drives, NAS shares and GPU settings from your old file go into the `volumes:` / `devices:` entries of the `home-blockbuster` service in the new `docker-compose.yml`.
+4. **Start it.** Either build locally or use the published image:
+
+   ```bash
+   docker compose up -d --build      # build from this checkout
+   # or
+   docker compose pull && docker compose up -d
+   ```
+
+Your `./data` folder is reused as it is, so libraries, profiles and watch history are kept. Port **8585 is no longer reachable from the network**: bookmarks, other devices and saved servers that use `http://<ip>:8585` stop working until they are switched to the new `https://` address. To also reach the app over plain HTTP from the server machine itself, uncomment the `127.0.0.1:8585:8585` port line in the compose file.
+
+**iPhone / iPad app.** No new app build is needed.
+
+1. Edit the saved server (or add a new one) and enter the new address, for example `https://nas.local`, without `:8585`. You may have to sign in again.
+2. On a LAN with the default certificate, trust the server's private CA once. Export it, send it to the device (AirDrop or Files), open it, then install the profile in Settings and switch it on under Settings → General → About → Certificate Trust Settings:
+
+   ```bash
+   docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./home-blockbuster-root-ca.crt
+   ```
+
+3. Use a name that is in `HB_DOMAIN`. The certificate only covers those names, so an IP address that is not listed fails with a certificate error. With a public domain and Let's Encrypt, steps 2 and 3 are not needed.
+
 ## Adding your media
 
 Home Blockbuster reads folders **as the server sees them**. Anything the operating system can mount can be a library.
