@@ -70,15 +70,43 @@ No media at hand? Generate a small demo library (requires ffmpeg):
 node scripts/generate-demo-media.mjs --out ./test-media
 ```
 
-### Docker
+### Docker (HTTPS, one command)
+
+On any machine with [Docker](https://docs.docker.com/get-docker/) (Linux, macOS, a NAS, a Raspberry Pi):
 
 ```bash
-docker compose up -d
+curl -fsSL https://github.com/swissmarley/home-blockbuster/releases/latest/download/install.sh | sh
 ```
 
-Edit `docker-compose.yml` first: every folder you want to watch must be mounted into the container (for example `/path/to/Movies:/media/movies:ro`). Inside the app, add libraries using the container paths (`/media/movies`). The image includes ffmpeg; data is stored in `./data`.
+The installer asks for the host name or IP you will open the app with and your movie and TV folders, then pulls the published image (`ghcr.io/swissmarley/home-blockbuster`, amd64 and arm64) and starts it behind [Caddy](https://caddyserver.com/), which provides HTTPS. Open the printed `https://…` address. Re-run the same command to update; your `.env` and `./data` are kept. Everything can be preset with environment variables to run unattended (see the header of [`install.sh`](install.sh)), and `HB_VERSION=1.0.0` pins a release.
+
+The app container is not published on the network, only Caddy is (ports 80 and 443). Port 80 only redirects to HTTPS, so passwords, session cookies and video never travel in plaintext. Which certificate you get depends on the name you chose:
+
+| You open the app with | Certificate | One-time step |
+| --- | --- | --- |
+| A public domain (`media.example.com`) pointing at this machine, ports 80/443 forwarded | Free **Let's Encrypt**, renewed automatically | None, every device trusts it. Best choice for the iPhone app |
+| A LAN name or IP (`nas.local`, `192.168.1.20`, `localhost`) | Caddy's **private local CA** | Install `home-blockbuster-root-ca.crt` (exported by the installer) on each device and trust it. The installer prints the steps for iOS, macOS, Windows, Android and Linux |
+| Your own certificate | Files in `./certs` | Set `HB_TLS="/certs/fullchain.pem /certs/privkey.pem"` in `.env` |
+
+Public domains automatically get a generated password if you do not set one. In the iOS app, add the server with the full `https://` address.
+
+To manage it later, work from the install folder (`~/home-blockbuster` by default):
+
+```bash
+docker compose logs -f      # watch the logs
+docker compose down         # stop
+nano .env                   # change the name, folders, password… then: docker compose up -d
+```
+
+Every folder you want to watch must be mounted into the container: `HB_MOVIES_DIR` and `HB_TV_DIR` in `.env` cover the usual case, and `docker-compose.yml` has commented examples for USB drives, SMB/NFS shares and GPU transcoding. Inside the app, add libraries using the container paths (`/media/movies`, `/media/tv`). The image includes ffmpeg; data is stored in `./data`. All `.env` options are listed in [`.env.docker.example`](.env.docker.example).
 
 The server runs as the unprivileged `node` user (uid 1000), so your media must be readable by that user. On start, the container takes ownership of the data folder, which matters when you upgrade from an older image that ran as root. For VAAPI, also add the host's `render` group with `group_add` (see the compose file).
+
+Building from source instead: `git clone` the repository, copy `.env.docker.example` to `.env`, then `docker compose up -d --build`.
+
+Enter keys in **Settings → Metadata & Artwork**, or set `TMDB_API_KEY` / `OMDB_API_KEY`. Without any key, TVmaze and iTunes still provide artwork and details, and tags embedded in your files are used as a fallback. Artwork is cached locally after the first view.
+
+**Publishing (maintainers):** pushing a `v*.*.*` tag runs `.github/workflows/publish.yml`, which tests the code, pushes the multi-arch image to GitHub Container Registry (tags `1.2.3`, `1.2`, `latest`; every push to `main` updates `edge`) and attaches `install.sh`, `docker-compose.yml` and `Caddyfile` to a GitHub Release. Make the package public once under the repository's **Packages** settings so anyone can pull it.
 
 ## Adding your media
 
@@ -176,7 +204,7 @@ Playback, transcoding, hardware acceleration, thumbnails and the automatic scan 
 
 Home Blockbuster is designed for your home network. Without a password, anyone who can open it can browse the server's folders (in the folder browser), change libraries and settings, and watch your media, so:
 
-- **Set a password** during setup or in **Settings → Security** (or with `HB_PASSWORD`) if other people or untrusted devices share your network. **Never expose it to the internet without one**; ideally use a VPN, or a reverse proxy with HTTPS and `TRUST_PROXY`. Each device signs in once for 30 days. Signing out ends that session, and changing the password signs out every device.
+- **Set a password** during setup or in **Settings → Security** (or with `HB_PASSWORD`) if other people or untrusted devices share your network. **Never expose it to the internet without one**; ideally use a VPN, or the bundled HTTPS setup (see **Docker** above). Each device signs in once for 30 days. Signing out ends that session, and changing the password signs out every device.
 - Without a password, the server only answers to IP addresses, `localhost` and LAN names, which blocks DNS-rebinding attacks from websites. If you use another host name, add it to `ALLOWED_HOSTS`, or set a password.
 - Symlinks inside a library are only followed when they point into a library folder (or `MEDIA_ROOTS`), so a link dropped into a shared folder can't publish other files on the server. Set `ALLOW_EXTERNAL_SYMLINKS=1` to follow them anyway.
 - The **Kids profile is a filter, not a lock**: it hides titles that aren't rated for children (unrated titles must be tagged family/children) and settings, but anyone can switch profiles.

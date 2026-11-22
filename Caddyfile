@@ -1,0 +1,21 @@
+# HTTPS front door for Home Blockbuster (used by docker-compose.yml, configured through .env).
+#
+#   HB_DOMAIN  host name(s) or IP(s) people open the app with, comma separated
+#   HB_TLS     "internal"  -> certificate from Caddy's own local CA (LAN names, IPs, localhost)
+#              you@mail.com -> free Let's Encrypt certificate (public domain, ports 80 + 443 reachable)
+#              /certs/fullchain.pem /certs/privkey.pem -> your own certificate (./certs is mounted at /certs)
+#
+# Plain HTTP is only answered with a redirect to HTTPS; the app itself is never published on the network.
+{
+	http_port {$HB_HTTP_PORT}
+	https_port {$HB_HTTPS_PORT}
+}
+
+{$HB_DOMAIN} {
+	tls {$HB_TLS}
+
+	reverse_proxy home-blockbuster:8585 {
+		# Video, HLS segments and live events must reach the client as they are produced.
+		flush_interval -1
+	}
+}

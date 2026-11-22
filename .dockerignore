@@ -6,3 +6,9 @@ coverage
 .git
 *.log
 .env
+ios
+docs
+.github
+Caddyfile
+install.sh
+*.crt
