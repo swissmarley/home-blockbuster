@@ -1,6 +1,6 @@
 {
   "name": "home-blockbuster",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "A self-hosted, Netflix-style streaming experience for the movies and shows on your NAS, server, external or internal drives.",
   "license": "MIT",
