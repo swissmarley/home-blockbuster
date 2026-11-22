@@ -1,0 +1,152 @@
+name: Android
+
+# Builds the Android app (android/) and runs its unit tests.
+#   push / pull request touching android/  -> signed APK uploaded as a workflow artifact
+#   tag android-v1.2.3                      -> GitHub Release "Home Blockbuster for Android 1.2.3" with the APK
+#   manual run with "release" checked       -> creates the android-v<version> tag and that release
+# The Docker image and the iOS app are not built or touched by this workflow.
+#
+# Signing: if the repository has the secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+# ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD, the APK is signed with that private key. Otherwise the
+# public community key in android/keystore is used. Android only installs an update over an app signed
+# with the same key, so pick one and keep it.
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["android-v*"]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a GitHub Release with the APK"
+        type: boolean
+        default: false
+      version:
+        description: "Version for the release, e.g. 1.0.0 (tag android-v<version>)"
+        required: false
+        default: ""
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # GitHub's Ubuntu runners ship the Android SDK; make sure the platform this app compiles against is there.
+      - name: Android SDK
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$sdkmanager" ] || sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Work out the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_RELEASE: ${{ inputs.release }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/android-v* ]]; then
+            version="${GITHUB_REF#refs/tags/android-v}"
+            release=true
+          elif [[ "$INPUT_RELEASE" == "true" ]]; then
+            version="${INPUT_VERSION:?Enter a version to publish a release}"
+            release=true
+          else
+            version="${INPUT_VERSION:-1.0.0}"
+            release=false
+          fi
+          if ! [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Version must look like 1.2.3, got '$version'"
+            exit 1
+          fi
+          # Android needs an ever-increasing integer: 1.2.3 -> 10203.
+          code=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+      - name: Use the private signing key (if configured)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            {
+              echo "HB_KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
+              echo "HB_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+              echo "HB_KEY_ALIAS=$KEY_ALIAS"
+              echo "HB_KEY_PASSWORD=$KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+            echo "Signing with the repository's private key."
+          else
+            echo "Signing with the public community key (android/keystore/community.jks)."
+          fi
+
+      - name: Test and build
+        env:
+          HB_VERSION_NAME: ${{ steps.version.outputs.name }}
+          HB_VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleRelease
+
+      - name: Name the APK
+        id: apk
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          name="HomeBlockbuster-${VERSION}.apk"
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/$name"
+          (cd dist && sha256sum "$name" > "$name.sha256")
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: android/dist/*
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: steps.version.outputs.release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v${{ steps.version.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          name: Home Blockbuster for Android ${{ steps.version.outputs.name }}
+          generate_release_notes: true
+          body: |
+            Native Android app for Home Blockbuster (Android 8.0 or newer).
+
+            **Install:** download `${{ steps.apk.outputs.name }}` on your phone, open it and allow installing from your browser or file manager when Android asks. Updates install over the previous version.
+
+            Then add your server's address (for example `192.168.1.20:8585`), exactly as in the iOS app.
+          files: |
+            android/dist/${{ steps.apk.outputs.name }}
+            android/dist/${{ steps.apk.outputs.name }}.sha256

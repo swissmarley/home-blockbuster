@@ -102,7 +102,7 @@ It asks how your devices should connect, then pulls the published image (`ghcr.i
 | **HTTP** | `http://<this-machine>:8585` | none | A trusted home network, the simplest setup |
 | **Caddy** | `https://<your domain, name or IP>` | HTTPS: Let's Encrypt, a private CA or your own certificate | Your own domain, or no Tailscale |
 
-**Tailscale.** You need a free [Tailscale](https://tailscale.com/) account and the Tailscale app on the devices that watch. Once, in the [admin console](https://login.tailscale.com/admin/dns), turn on **MagicDNS** and **HTTPS Certificates**. The installer starts a Tailscale container next to the app and prints a login link; open it and approve the device. The app is then reachable only from your own Tailscale network (it is not published on the internet), over a certificate every device already trusts. In the iOS app, add the server with the full `https://…ts.net` address.
+**Tailscale.** You need a free [Tailscale](https://tailscale.com/) account and the Tailscale app on the devices that watch. Once, in the [admin console](https://login.tailscale.com/admin/dns), turn on **MagicDNS** and **HTTPS Certificates**. The installer starts a Tailscale container next to the app and prints a login link; open it and approve the device. The app is then reachable only from your own Tailscale network (it is not published on the internet), over a certificate every device already trusts. In the iOS or Android app, add the server with the full `https://…ts.net` address.
 
 **HTTP.** `HB_MODE=http` (or choose it in the installer) publishes the app on port 8585 like the source setup. Anyone on your network can read the traffic, so set a password if the network is shared.
 
@@ -138,9 +138,27 @@ A server running from the source folder (HTTP on 8585) keeps working after `git 
 2. Keep your data: `mkdir -p ~/home-blockbuster && cp -a ./data ~/home-blockbuster/data`.
 3. Run the installer, choose **Tailscale** (or Caddy), and give it the same movie and TV folders.
 4. Libraries are stored with their container paths. The installer mounts the folders at `/media/movies` and `/media/tv`; if your old setup used other paths (a USB drive, a NAS share), add matching volumes to `~/home-blockbuster/docker-compose.yml`.
-5. In the iOS app, add the new `https://…` address (the old `http://<ip>:8585` entry no longer exists once the old container is stopped). No new app build is needed, and the app still accepts plain HTTP servers too.
+5. In the iOS or Android app, add the new `https://…` address (the old `http://<ip>:8585` entry no longer exists once the old container is stopped). No new app build is needed, and the apps still accept plain HTTP servers too.
 
 Installs made with release 1.0.0 (Caddy only) upgrade in place: re-run the installer and it keeps your settings.
+
+## Mobile apps
+
+Native apps for iPhone/iPad (`ios/`) and Android (`android/`) connect to any Home Blockbuster server: save as many servers as you like, pick a profile and browse the same rows, search, My List and title pages as the web app, with muted previews, Continue Watching and a full-screen player (audio tracks, subtitles, speed, episodes panel, next-episode countdown). Progress, My List and ratings are shared with every other device.
+
+### Android
+
+1. On your phone, open the [latest Android release](https://github.com/swissmarley/home-blockbuster/releases?q=android&expanded=true) and download `HomeBlockbuster-<version>.apk`.
+2. Open the downloaded file. The first time, Android asks you to allow installing apps from your browser or file manager; allow it, go back and tap **Install**. Later versions install over the previous one and keep your servers.
+3. Tap **Add Server** and enter the address you use in a browser, for example `192.168.1.20:8585` (8585 is added if you leave out the port), `nas.local:8585` or `https://box.tailnet.ts.net`.
+
+Requires Android 8.0 or newer. MP4, MKV and WebM files whose codecs the phone decodes (H.264, and HEVC/VP9/AV1/AC3 where the hardware supports them) play directly; everything else is converted by the server, as for the iPhone. Going home while a video plays keeps it in a picture-in-picture window.
+
+For HTTPS with Caddy's private local CA, install `home-blockbuster-root-ca.crt` on the phone first (**Settings → Security → Encryption & credentials → Install a certificate → CA certificate**; the exact path varies by manufacturer). The app trusts user-installed certificates for this purpose. Plain HTTP servers on your network work without any setup.
+
+**Building it yourself:** install JDK 17+ and the Android SDK (or Android Studio), then `cd android && ./gradlew assembleRelease`; the APK is in `android/app/build/outputs/apk/release/`. `./gradlew testDebugUnitTest` runs the unit tests; with `HB_TEST_SERVER=http://localhost:8585` set it also drives the API client against a running server.
+
+**Releases:** the [Android workflow](.github/workflows/android.yml) builds and tests every change under `android/`. Pushing a tag such as `android-v1.2.3` (or running the workflow by hand with *release* checked) publishes a GitHub Release with the signed APK. By default the APK is signed with the public community key in `android/keystore/`, so anyone's build of the open-source app updates cleanly; to sign with your own private key instead, add the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` (switching keys means uninstalling the old app once).
 
 ## Adding your media
 
@@ -265,6 +283,8 @@ web/src
 ├── components/  nav, billboard, rows, cards, hover popup, detail modal…
 ├── pages/       browse, player, profiles, settings, onboarding, search
 └── store/       app state (Zustand)
+ios/             native iPhone/iPad app (SwiftUI, AVPlayer)
+android/         native Android app (Kotlin, Jetpack Compose, Media3/ExoPlayer)
 ```
 
 ## Credits
