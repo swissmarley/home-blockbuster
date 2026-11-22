@@ -62,6 +62,7 @@ final class PlayerController {
     // MARK: - Lifecycle
 
     func start(app: AppModel, fromStart: Bool) async {
+        PreviewCenter.prepareForFullPlayback()
         self.app = app
         client = app.client
         profile = app.profile
@@ -316,15 +317,57 @@ final class PlayerController {
 
     func playNext() async {
         guard let next else { return }
+        await switchTo(fileId: next.fileId, fromStart: true)
+    }
+
+    /// Jump to another episode of the same title. Picked from the list it resumes where you left off.
+    func switchTo(fileId newFile: String, fromStart: Bool = false) async {
+        guard newFile != info?.fileId || error != nil else { return }
         reportProgress(force: true)
-        fileId = next.fileId
+        if let info, duration > 0 {
+            // Keep the episode list's progress bars current without a round trip.
+            progressOverrides[info.fileId] = ProgressEntry(fileId: info.fileId, titleId: info.titleId, position: ended ? duration : position,
+                                                           duration: duration, updatedAt: Date().timeIntervalSince1970 * 1000,
+                                                           finished: ended || duration - position < 60)
+        }
+        player.pause()
+        fileId = newFile
         subtitle = nil
         cues = []
         cueText = nil
         audioIndex = nil
         triedConversion = false
         lastReportedPosition = -1
-        await load(position: 0)
+        position = 0
+        duration = 0
+        await load(position: fromStart ? 0 : nil)
+    }
+
+    // MARK: - Episodes
+
+    /// Seasons and episodes of the playing title, for the in-player episode list.
+    private(set) var detail: TitleDetail?
+    private(set) var detailLoading = false
+    private var progressOverrides: [String: ProgressEntry] = [:]
+
+    var hasEpisodes: Bool {
+        guard let title else { return false }
+        return info?.episode != nil && (title.kind == .show || title.episodeCount > 1)
+    }
+
+    func loadEpisodes() async {
+        guard let client, let titleId = info?.titleId, detail?.id != titleId, !detailLoading else { return }
+        detailLoading = true
+        defer { detailLoading = false }
+        detail = try? await client.title(titleId, profileId: profile?.id)
+    }
+
+    /// Saved progress for an episode, including what was watched in this session.
+    func progress(for fileId: String) -> ProgressEntry? {
+        if fileId == info?.fileId, duration > 0 {
+            return ProgressEntry(fileId: fileId, titleId: info?.titleId ?? "", position: position, duration: duration, updatedAt: 0, finished: false)
+        }
+        return progressOverrides[fileId] ?? app?.progress(for: fileId)
     }
 
     func retry() {

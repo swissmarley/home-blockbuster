@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RowView: View {
+    @Environment(AppModel.self) private var app
     let row: RowDef
 
     var body: some View {
@@ -21,6 +22,7 @@ struct RowView: View {
                                 Top10Card(rank: index + 1, title: title)
                             }
                             .buttonStyle(.plain)
+                            .titlePeek(title, app: app)
                         }
                     case .standard:
                         ForEach(row.items) { title in
@@ -28,6 +30,7 @@ struct RowView: View {
                                 PosterCard(title: title)
                             }
                             .buttonStyle(.plain)
+                            .titlePeek(title, app: app)
                         }
                     }
                 }

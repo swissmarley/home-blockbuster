@@ -13,6 +13,7 @@ struct PlayerScreen: View {
     @State private var scrubbing = false
     @State private var scrubValue: Double = 0
     @State private var fill = false
+    @State private var episodesOpen = false
 
     init(request: PlayRequest) {
         self.request = request
@@ -45,7 +46,7 @@ struct PlayerScreen: View {
                 ProgressView().tint(.white).scaleEffect(1.6).allowsHitTesting(false)
             }
 
-            if controlsVisible && controller.error == nil {
+            if controlsVisible && controller.error == nil && !episodesOpen {
                 controls.transition(.opacity)
             }
 
@@ -53,8 +54,16 @@ struct PlayerScreen: View {
                 errorView(error)
             }
 
-            if let countdown = controller.countdown, let next = controller.next {
+            if let countdown = controller.countdown, let next = controller.next, !episodesOpen {
                 nextCountdown(countdown, next)
+            }
+
+            if episodesOpen {
+                EpisodesPanel(controller: controller, onPick: { fileId in
+                    closeEpisodes()
+                    Task { await controller.switchTo(fileId: fileId) }
+                }, onClose: closeEpisodes)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .statusBarHidden(!controlsVisible)
@@ -203,6 +212,14 @@ struct PlayerScreen: View {
                         .foregroundStyle(Theme.secondaryText)
                 }
                 Spacer()
+                if controller.hasEpisodes {
+                    Button { openEpisodes() } label: {
+                        Label("Episodes", systemImage: "rectangle.stack.fill").font(.subheadline.weight(.semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .accessibilityHint("Shows every episode so you can switch")
+                }
                 if controller.next != nil {
                     Button {
                         Task { await controller.playNext() }
@@ -272,9 +289,20 @@ struct PlayerScreen: View {
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled, controller.isPlaying, !scrubbing else { return }
+            guard !Task.isCancelled, controller.isPlaying, !scrubbing, !episodesOpen else { return }
             withAnimation(.easeOut(duration: 0.3)) { controlsVisible = false }
         }
+    }
+
+    private func openEpisodes() {
+        hideTask?.cancel()
+        Task { await controller.loadEpisodes() }
+        withAnimation(.spring(duration: 0.35)) { episodesOpen = true }
+    }
+
+    private func closeEpisodes() {
+        withAnimation(.spring(duration: 0.3)) { episodesOpen = false }
+        show()
     }
 
     private func close() {
@@ -360,4 +388,172 @@ struct RoutePicker: UIViewRepresentable {
         return view
     }
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
+}
+
+/// Netflix-style episode picker shown over the playing video.
+private struct EpisodesPanel: View {
+    let controller: PlayerController
+    let onPick: (String) -> Void
+    let onClose: () -> Void
+
+    @State private var season: Int?
+
+    private var seasons: [SeasonDTO] { controller.detail?.seasons ?? [] }
+    private var currentSeason: SeasonDTO? {
+        seasons.first { $0.number == season } ?? seasons.first { $0.number == controller.episode?.season } ?? seasons.first
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { onClose() }
+
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                if controller.detail == nil {
+                    ProgressView().tint(.white).frame(maxWidth: .infinity, minHeight: 200)
+                } else {
+                    carousel
+                }
+            }
+            .padding(.vertical, 16)
+        }
+        .foregroundStyle(.white)
+        .onAppear { season = controller.episode?.season }
+    }
+
+    private var header: some View {
+        HStack(spacing: 14) {
+            if seasons.count > 1 {
+                Menu {
+                    ForEach(seasons) { s in
+                        Button {
+                            season = s.number
+                        } label: {
+                            if s.number == currentSeason?.number { Label(s.name, systemImage: "checkmark") } else { Text(s.name) }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(currentSeason?.name ?? "Season")
+                        Image(systemName: "chevron.down").font(.caption.bold())
+                    }
+                    .font(.headline)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
+                }
+            } else {
+                Text(currentSeason?.name ?? controller.title?.name ?? "Episodes").font(.headline)
+            }
+            Spacer()
+            Button(action: onClose) {
+                Image(systemName: "xmark").font(.system(size: 18, weight: .semibold)).frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Close episodes")
+        }
+        .padding(.horizontal, 24)
+    }
+
+    private var carousel: some View {
+        let episodes = currentSeason?.episodes ?? []
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(episodes) { ep in
+                        EpisodeTile(episode: ep,
+                                    playing: ep.fileId == controller.info?.fileId,
+                                    progress: controller.progress(for: ep.fileId),
+                                    fallbackArt: controller.detail?.images.wide) {
+                            onPick(ep.fileId)
+                        }
+                        .id(ep.fileId)
+                    }
+                }
+                .padding(.horizontal, 24)
+            }
+            .scrollIndicators(.hidden)
+            .onAppear { scrollToCurrent(proxy) }
+            .onChange(of: currentSeason?.number) { _, _ in scrollToCurrent(proxy) }
+            .onChange(of: controller.detail?.id) { _, _ in scrollToCurrent(proxy) }
+        }
+    }
+
+    private func scrollToCurrent(_ proxy: ScrollViewProxy) {
+        guard let id = controller.info?.fileId,
+              currentSeason?.episodes.contains(where: { $0.fileId == id }) == true else { return }
+        DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) }
+    }
+}
+
+private struct EpisodeTile: View {
+    let episode: EpisodeDTO
+    let playing: Bool
+    let progress: ProgressEntry?
+    let fallbackArt: String?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .bottomLeading) {
+                    RemoteImage(path: episode.still ?? fallbackArt, maxPixel: 600)
+                        .frame(width: 240, height: 135)
+                        .clipped()
+                    if playing {
+                        Text("NOW PLAYING")
+                            .font(.caption2.weight(.heavy))
+                            .padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(Theme.red, in: RoundedRectangle(cornerRadius: 2))
+                            .padding(8)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 16))
+                            .frame(width: 40, height: 40)
+                            .background(.black.opacity(0.5), in: Circle())
+                            .overlay(Circle().stroke(.white, lineWidth: 1.2))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    if let progress, progress.duration > 0 {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(.white.opacity(0.3))
+                                Rectangle().fill(Theme.red)
+                                    .frame(width: geo.size.width * (progress.finished ? 1 : min(1, progress.position / progress.duration)))
+                            }
+                        }
+                        .frame(height: 3)
+                    }
+                }
+                .frame(width: 240, height: 135)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(playing ? Color.white : .clear, lineWidth: 2))
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(episode.episode). \(episode.name)")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if let mins = episode.runtime ?? episode.duration.map({ $0 / 60 }), let text = Format.runtime(mins) {
+                        Text(text).font(.caption).foregroundStyle(Theme.secondaryText)
+                    }
+                }
+                if !episode.overview.isEmpty {
+                    Text(episode.overview)
+                        .font(.caption)
+                        .foregroundStyle(Theme.secondaryText)
+                        .lineLimit(3)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .frame(width: 240, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .allowsHitTesting(!playing)
+        .accessibilityLabel("\(episode.code) \(episode.name)\(playing ? ", now playing" : "")")
+    }
 }

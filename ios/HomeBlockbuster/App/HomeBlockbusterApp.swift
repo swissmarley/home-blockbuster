@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
 struct RootView: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.scenePhase) private var scenePhase
     @State private var restored = false
 
     var body: some View {
@@ -57,6 +58,12 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: app.phase)
+        .onChange(of: app.playRequest == nil) { _, closed in
+            if closed { PreviewCenter.shared.suspended = scenePhase != .active }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            PreviewCenter.shared.suspended = phase != .active || app.playRequest != nil
+        }
         .fullScreenCover(item: $app.playRequest, onDismiss: { app.playerClosed() }) { request in
             PlayerScreen(request: request)
                 .environment(app)
