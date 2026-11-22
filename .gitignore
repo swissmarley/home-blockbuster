@@ -19,3 +19,6 @@ xcuserdata/
 # Docker deployment
 certs/
 home-blockbuster-root-ca.crt
+
+# The Android app has a Kotlin package named "data"
+!android/**/data/
