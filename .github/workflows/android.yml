@@ -46,14 +46,21 @@ jobs:
       run:
         working-directory: android
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      # GitHub's Ubuntu runners ship the Android SDK; make sure the platform this app compiles against is there.
+      - name: Android SDK
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$sdkmanager" ] || sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -120,7 +127,7 @@ jobs:
           (cd dist && sha256sum "$name" > "$name.sha256")
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.apk.outputs.name }}
           path: android/dist/*
