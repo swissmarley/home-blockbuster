@@ -15,3 +15,7 @@ Thumbs.db
 ios/build/
 xcuserdata/
 *.xcarchive
+
+# Docker deployment
+certs/
+home-blockbuster-root-ca.crt
