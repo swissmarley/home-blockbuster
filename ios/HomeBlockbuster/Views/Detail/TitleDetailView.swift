@@ -62,15 +62,30 @@ struct TitleDetailView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 300)
                 .overlay { RemoteImage(path: images?.backdrop ?? images?.card ?? images?.thumb ?? images?.poster, maxPixel: 1400) }
+                .overlay { PreviewVideoLayer(id: previewId) }
                 .clipped()
             LinearGradient(colors: [.black.opacity(0.4), .clear, Theme.background], startPoint: .top, endPoint: .bottom)
+                .allowsHitTesting(false)
             if let logo = images?.logo {
                 RemoteImage(path: logo, contentMode: .fit, maxPixel: 700) { Color.clear }
                     .frame(maxWidth: 220, maxHeight: 80, alignment: .bottomLeading)
                     .padding(16)
             }
+            PreviewControlButton(id: previewId)
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(height: 300)
+        .onAppear { startPreview() }
+        .onChange(of: summary?.id) { _, _ in startPreview() }
+        .onDisappear { PreviewCenter.shared.release(previewId) }
+    }
+
+    private var previewId: String { "page-\(titleId)" }
+
+    private func startPreview() {
+        guard let summary else { return }
+        PreviewCenter.shared.request(previewId, title: summary, app: app, priority: .page, delay: .seconds(1.2))
     }
 
     // MARK: Content
