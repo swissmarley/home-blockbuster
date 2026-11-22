@@ -75,6 +75,6 @@ jobs:
           generate_release_notes: true
           files: |
             install.sh
-            docker-compose.yml
+            docker-compose.deploy.yml
             Caddyfile
-            .env.docker.example
+            tailscale-serve.json

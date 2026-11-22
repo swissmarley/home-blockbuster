@@ -12,3 +12,6 @@ docs
 Caddyfile
 install.sh
 *.crt
+docker-compose.deploy.yml
+tailscale-serve.json
+.env.docker.example

@@ -1,45 +1,38 @@
-# Home Blockbuster with Docker Compose, served over HTTPS.
+# Home Blockbuster with Docker Compose.
 #
-#   One command:   curl -fsSL https://github.com/swissmarley/home-blockbuster/releases/latest/download/install.sh | sh
-#   Or by hand:    copy .env.docker.example to .env, edit it, then   docker compose up -d
-#   From source:   docker compose up -d --build
+#   docker compose up -d        then open http://<this-machine>:8585
 #
-# A Caddy container terminates TLS on ports 80/443 and forwards to the app, which is only reachable
-# inside the Compose network, so nothing between your devices and the server travels in plaintext.
-#
-# Every folder you want to watch must be visible inside the app container. HB_MOVIES_DIR and HB_TV_DIR
-# (in .env) cover the common case; add more bind mounts, external drives or NAS shares below.
-# In the app, add libraries using their path inside the container (e.g. /media/movies).
+# Every folder you want to watch must be visible inside the container. Mount local folders and
+# external drives with bind mounts, and NAS shares either through the host (mount it on the host,
+# then bind-mount it) or directly with a CIFS/NFS volume as shown below. In the app, add them as
+# libraries using their path inside the container (e.g. /media/movies).
 
 services:
   home-blockbuster:
-    image: ghcr.io/swissmarley/home-blockbuster:${HB_VERSION:-latest}
     build: .
+    image: home-blockbuster:latest
     container_name: home-blockbuster
     restart: unless-stopped
-    # Not published on the host on purpose: only Caddy talks to it. To also allow plain HTTP from
-    # this machine only (never expose it to the network), uncomment:
-    # ports:
-    #   - "127.0.0.1:8585:8585"
-    expose:
-      - "8585"
+    ports:
+      - "8585:8585"
     environment:
-      TZ: ${TZ:-UTC}
+      TZ: Europe/Zurich
       # Optional: free TMDB key for the best artwork & metadata (https://www.themoviedb.org/settings/api)
-      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      TMDB_API_KEY: ""
       # Optional: free OMDb key (https://www.omdbapi.com/apikey.aspx)
-      OMDB_API_KEY: ${OMDB_API_KEY:-}
+      OMDB_API_KEY: ""
       # Optional: require a password to use the app. You can also set one in the app (Settings → Security).
-      HB_PASSWORD: ${HB_PASSWORD:-}
-      # Caddy is one proxy hop in front: trust its X-Forwarded-* headers (client IPs, Secure cookies).
-      TRUST_PROXY: "1"
-      # Host names the app answers to when no password is set (your HB_DOMAIN).
-      ALLOWED_HOSTS: ${HB_DOMAIN:-localhost}
+      HB_PASSWORD: ""
+      # Behind a reverse proxy: trust its X-Forwarded-* headers (client IPs, HTTPS cookies)
+      # TRUST_PROXY: "1"
+      # Without a password, only IPs, localhost and LAN names (nas, *.local, *.lan…) are answered.
+      # List other host names you open the app with, comma separated:
+      # ALLOWED_HOSTS: "media.example.com"
     volumes:
       - ./data:/data                         # database, artwork cache, thumbnails
       # Local folders and external drives (read-only is enough, files are never modified):
-      - ${HB_MOVIES_DIR:-./media/movies}:/media/movies:ro
-      - ${HB_TV_DIR:-./media/tv}:/media/tv:ro
+      - /path/to/Movies:/media/movies:ro
+      - /path/to/TV Shows:/media/tv:ro
       # - /media/usb-drive:/media/usb:ro     # an external USB drive mounted on the host
       # NAS shares mounted by Docker (see "volumes" below):
       # - nas-movies:/media/nas-movies:ro
@@ -51,31 +44,7 @@ services:
     # group_add:
     #   - "109"
 
-  caddy:
-    image: caddy:2-alpine
-    container_name: home-blockbuster-https
-    restart: unless-stopped
-    depends_on:
-      home-blockbuster:
-        condition: service_healthy
-    ports:
-      - "${HB_HTTP_PORT:-80}:${HB_HTTP_PORT:-80}"
-      - "${HB_HTTPS_PORT:-443}:${HB_HTTPS_PORT:-443}"
-      - "${HB_HTTPS_PORT:-443}:${HB_HTTPS_PORT:-443}/udp"   # HTTP/3
-    environment:
-      HB_DOMAIN: ${HB_DOMAIN:-localhost}
-      HB_TLS: ${HB_TLS:-internal}
-      HB_HTTP_PORT: ${HB_HTTP_PORT:-80}
-      HB_HTTPS_PORT: ${HB_HTTPS_PORT:-443}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./certs:/certs:ro                    # your own certificate, if you use one (see Caddyfile)
-      - caddy_data:/data                     # issued certificates and the local CA: keep this volume
-      - caddy_config:/config
-
-volumes:
-  caddy_data:
-  caddy_config:
+# volumes:
 #   # SMB / CIFS share (Synology, QNAP, TrueNAS, Windows share…)
 #   nas-movies:
 #     driver: local

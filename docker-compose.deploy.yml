@@ -1,0 +1,117 @@
+# Home Blockbuster, packaged deployment. The installer saves this file as docker-compose.yml.
+# (The docker-compose.yml in the repository is the plain-HTTP setup for building from source; it is
+# unchanged and keeps working exactly as before.)
+#
+#   One command:   curl -fsSL https://github.com/swissmarley/home-blockbuster/releases/latest/download/install.sh | sh
+#   By hand:       copy .env.docker.example to .env, set COMPOSE_PROFILES and the rest, then
+#                  docker compose -f docker-compose.deploy.yml up -d
+#
+# COMPOSE_PROFILES (in .env) selects how devices connect, exactly one of:
+#   tailscale  HTTPS through your Tailscale network. A real certificate, nothing to install on the
+#              iPhone, works at home and away. Recommended.
+#   http       Plain HTTP on your LAN at http://<this-machine>:8585 (no encryption).
+#   caddy      HTTPS with your own domain (Let's Encrypt), a private CA, or your own certificate.
+#
+# Every folder you want to watch must be visible inside the app container. HB_MOVIES_DIR and
+# HB_TV_DIR (in .env) cover the common case; add more bind mounts, external drives or NAS shares
+# below. In the app, add libraries using their path inside the container (e.g. /media/movies).
+
+services:
+  home-blockbuster:
+    image: ghcr.io/swissmarley/home-blockbuster:${HB_VERSION:-latest}
+    build: .
+    container_name: home-blockbuster
+    restart: unless-stopped
+    ports:
+      # HB_BIND=0.0.0.0 in "http" mode (reachable on the LAN); 127.0.0.1 otherwise (this machine only).
+      - "${HB_BIND:-127.0.0.1}:${HB_PORT:-8585}:8585"
+    environment:
+      TZ: ${TZ:-UTC}
+      # Optional: free TMDB key for the best artwork & metadata (https://www.themoviedb.org/settings/api)
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      # Optional: free OMDb key (https://www.omdbapi.com/apikey.aspx)
+      OMDB_API_KEY: ${OMDB_API_KEY:-}
+      # Optional: require a password to use the app. You can also set one in the app (Settings → Security).
+      HB_PASSWORD: ${HB_PASSWORD:-}
+      # "1" when a proxy (Tailscale or Caddy) sits in front: trust its X-Forwarded-* headers.
+      TRUST_PROXY: ${HB_TRUST_PROXY:-}
+      # Host names the app answers to when no password is set (".ts.net" or your domain).
+      ALLOWED_HOSTS: ${HB_ALLOWED_HOSTS:-}
+    volumes:
+      - ./data:/data                         # database, artwork cache, thumbnails
+      # Local folders and external drives (read-only is enough, files are never modified):
+      - ${HB_MOVIES_DIR:-./media/movies}:/media/movies:ro
+      - ${HB_TV_DIR:-./media/tv}:/media/tv:ro
+      # - /media/usb-drive:/media/usb:ro     # an external USB drive mounted on the host
+      # NAS shares mounted by Docker (see "volumes" below):
+      # - nas-movies:/media/nas-movies:ro
+      # - nas-tv:/media/nas-tv:ro
+    # Intel/AMD GPU transcoding (choose "VAAPI" in Settings → Playback). The server runs as the
+    # unprivileged "node" user, so also give it the host's render group (see `getent group render`):
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # group_add:
+    #   - "109"
+
+  # --- profile "tailscale": HTTPS inside your tailnet --------------------------------------------
+  tailscale:
+    profiles: [tailscale]
+    image: tailscale/tailscale:stable
+    container_name: home-blockbuster-tailscale
+    hostname: ${HB_TS_HOSTNAME:-home-blockbuster}
+    restart: unless-stopped
+    depends_on:
+      home-blockbuster:
+        condition: service_healthy
+    environment:
+      TS_HOSTNAME: ${HB_TS_HOSTNAME:-home-blockbuster}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"                   # no extra privileges or devices needed
+      TS_SERVE_CONFIG: /config/serve.json    # HTTPS on 443 -> the app, with the certificate Tailscale issues
+      TS_AUTHKEY: ${HB_TS_AUTHKEY:-}         # optional; without it, open the login link from the logs
+    volumes:
+      - tailscale_state:/var/lib/tailscale   # keeps this device logged in: keep this volume
+      - ./tailscale-serve.json:/config/serve.json:ro
+
+  # --- profile "caddy": HTTPS with a domain, a private CA or your own certificate ----------------
+  caddy:
+    profiles: [caddy]
+    image: caddy:2-alpine
+    container_name: home-blockbuster-https
+    restart: unless-stopped
+    depends_on:
+      home-blockbuster:
+        condition: service_healthy
+    ports:
+      - "${HB_HTTP_PORT:-80}:${HB_HTTP_PORT:-80}"
+      - "${HB_HTTPS_PORT:-443}:${HB_HTTPS_PORT:-443}"
+      - "${HB_HTTPS_PORT:-443}:${HB_HTTPS_PORT:-443}/udp"   # HTTP/3
+    environment:
+      HB_DOMAIN: ${HB_DOMAIN:-localhost}
+      HB_TLS: ${HB_TLS:-internal}
+      HB_HTTP_PORT: ${HB_HTTP_PORT:-80}
+      HB_HTTPS_PORT: ${HB_HTTPS_PORT:-443}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro                    # your own certificate, if you use one (see Caddyfile)
+      - caddy_data:/data                     # issued certificates and the local CA: keep this volume
+      - caddy_config:/config
+
+volumes:
+  tailscale_state:
+  caddy_data:
+  caddy_config:
+#   # SMB / CIFS share (Synology, QNAP, TrueNAS, Windows share…)
+#   nas-movies:
+#     driver: local
+#     driver_opts:
+#       type: cifs
+#       device: "//192.168.1.10/Movies"
+#       o: "username=myuser,password=mypassword,vers=3.0,ro,uid=1000,gid=1000,iocharset=utf8"
+#   # NFS export
+#   nas-tv:
+#     driver: local
+#     driver_opts:
+#       type: nfs
+#       o: "addr=192.168.1.10,ro,nfsvers=4"
+#       device: ":/volume1/TV"

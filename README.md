@@ -70,7 +70,23 @@ No media at hand? Generate a small demo library (requires ffmpeg):
 node scripts/generate-demo-media.mjs --out ./test-media
 ```
 
-### Docker (HTTPS, one command)
+### Docker
+
+There are two ways to run it with Docker. Pick one.
+
+#### Plain HTTP from the source folder (unchanged)
+
+```bash
+docker compose up -d
+```
+
+Edit `docker-compose.yml` first: every folder you want to watch must be mounted into the container (for example `/path/to/Movies:/media/movies:ro`). Inside the app, add libraries using the container paths (`/media/movies`). The image includes ffmpeg; data is stored in `./data`. Open `http://<your-computer's-ip>:8585`.
+
+This file works exactly as it always did, so `git pull` followed by `docker compose up -d --build` on a server that already runs this way changes nothing: still HTTP on port 8585, your edits and your `./data` untouched.
+
+The server runs as the unprivileged `node` user (uid 1000), so your media must be readable by that user. On start, the container takes ownership of the data folder, which matters when you upgrade from an older image that ran as root. For VAAPI, also add the host's `render` group with `group_add` (see the compose file).
+
+#### One-command install with the published image
 
 On any machine with [Docker](https://docs.docker.com/get-docker/) (Linux, macOS, a NAS, a Raspberry Pi):
 
@@ -78,67 +94,53 @@ On any machine with [Docker](https://docs.docker.com/get-docker/) (Linux, macOS,
 curl -fsSL https://github.com/swissmarley/home-blockbuster/releases/latest/download/install.sh | sh
 ```
 
-The installer asks for the host name or IP you will open the app with and your movie and TV folders, then pulls the published image (`ghcr.io/swissmarley/home-blockbuster`, amd64 and arm64) and starts it behind [Caddy](https://caddyserver.com/), which provides HTTPS. Open the printed `https://…` address. Re-run the same command to update; your `.env` and `./data` are kept. Everything can be preset with environment variables to run unattended (see the header of [`install.sh`](install.sh)), and `HB_VERSION=1.0.0` pins a release.
+It asks how your devices should connect, then pulls the published image (`ghcr.io/swissmarley/home-blockbuster`, amd64 and arm64) and starts it. Re-run the same command to update; your `.env` and `./data` are kept. Everything can be preset with environment variables to run unattended (see the header of [`install.sh`](install.sh)), and `HB_VERSION=1.1.0` pins a release.
 
-The app container is not published on the network, only Caddy is (ports 80 and 443). Port 80 only redirects to HTTPS, so passwords, session cookies and video never travel in plaintext. Which certificate you get depends on the name you chose:
+| Mode | Address | Encryption | Best for |
+| --- | --- | --- | --- |
+| **Tailscale** (recommended) | `https://home-blockbuster.<your-tailnet>.ts.net` | HTTPS with a real certificate | iPhone and any device, at home and away; nothing to install on the devices except the Tailscale app |
+| **HTTP** | `http://<this-machine>:8585` | none | A trusted home network, the simplest setup |
+| **Caddy** | `https://<your domain, name or IP>` | HTTPS: Let's Encrypt, a private CA or your own certificate | Your own domain, or no Tailscale |
+
+**Tailscale.** You need a free [Tailscale](https://tailscale.com/) account and the Tailscale app on the devices that watch. Once, in the [admin console](https://login.tailscale.com/admin/dns), turn on **MagicDNS** and **HTTPS Certificates**. The installer starts a Tailscale container next to the app and prints a login link; open it and approve the device. The app is then reachable only from your own Tailscale network (it is not published on the internet), over a certificate every device already trusts. In the iOS app, add the server with the full `https://…ts.net` address.
+
+**HTTP.** `HB_MODE=http` (or choose it in the installer) publishes the app on port 8585 like the source setup. Anyone on your network can read the traffic, so set a password if the network is shared.
+
+**Caddy.** A [Caddy](https://caddyserver.com/) container terminates TLS on ports 80 and 443 and the app is not published on the network; port 80 only redirects to HTTPS. Which certificate you get depends on the name you chose:
 
 | You open the app with | Certificate | One-time step |
 | --- | --- | --- |
-| A public domain (`media.example.com`) pointing at this machine, ports 80/443 forwarded | Free **Let's Encrypt**, renewed automatically | None, every device trusts it. Best choice for the iPhone app |
+| A public domain (`media.example.com`) pointing at this machine, ports 80/443 forwarded | Free **Let's Encrypt**, renewed automatically | None |
 | A LAN name or IP (`nas.local`, `192.168.1.20`, `localhost`) | Caddy's **private local CA** | Install `home-blockbuster-root-ca.crt` (exported by the installer) on each device and trust it. The installer prints the steps for iOS, macOS, Windows, Android and Linux |
 | Your own certificate | Files in `./certs` | Set `HB_TLS="/certs/fullchain.pem /certs/privkey.pem"` in `.env` |
 
-Public domains automatically get a generated password if you do not set one. In the iOS app, add the server with the full `https://` address.
+Public domains automatically get a generated password if you do not set one.
 
-To manage it later, work from the install folder (`~/home-blockbuster` by default):
+To manage the install later, work from its folder (`~/home-blockbuster` by default):
 
 ```bash
 docker compose logs -f      # watch the logs
 docker compose down         # stop
-nano .env                   # change the name, folders, password… then: docker compose up -d
+nano .env                   # change folders, password… then: docker compose up -d
 ```
 
-Every folder you want to watch must be mounted into the container: `HB_MOVIES_DIR` and `HB_TV_DIR` in `.env` cover the usual case, and `docker-compose.yml` has commented examples for USB drives, SMB/NFS shares and GPU transcoding. Inside the app, add libraries using the container paths (`/media/movies`, `/media/tv`). The image includes ffmpeg; data is stored in `./data`. All `.env` options are listed in [`.env.docker.example`](.env.docker.example).
-
-The server runs as the unprivileged `node` user (uid 1000), so your media must be readable by that user. On start, the container takes ownership of the data folder, which matters when you upgrade from an older image that ran as root. For VAAPI, also add the host's `render` group with `group_add` (see the compose file).
-
-Building from source instead: `git clone` the repository, copy `.env.docker.example` to `.env`, then `docker compose up -d --build`.
+Every folder you want to watch must be mounted into the container: `HB_MOVIES_DIR` and `HB_TV_DIR` in `.env` cover the usual case, and the compose file has commented examples for USB drives, SMB/NFS shares and GPU transcoding. Inside the app, add libraries using the container paths (`/media/movies`, `/media/tv`). All `.env` options are listed in [`.env.docker.example`](.env.docker.example). To run this package from a source checkout instead of the installer: copy `.env.docker.example` to `.env`, then `docker compose -f docker-compose.deploy.yml up -d --build`.
 
 Enter keys in **Settings → Metadata & Artwork**, or set `TMDB_API_KEY` / `OMDB_API_KEY`. Without any key, TVmaze and iTunes still provide artwork and details, and tags embedded in your files are used as a fallback. Artwork is cached locally after the first view.
 
-**Publishing (maintainers):** pushing a `v*.*.*` tag runs `.github/workflows/publish.yml`, which tests the code, pushes the multi-arch image to GitHub Container Registry (tags `1.2.3`, `1.2`, `latest`; every push to `main` updates `edge`) and attaches `install.sh`, `docker-compose.yml` and `Caddyfile` to a GitHub Release. Make the package public once under the repository's **Packages** settings so anyone can pull it.
+**Publishing (maintainers):** pushing a `v*.*.*` tag runs `.github/workflows/publish.yml`, which tests the code, pushes the multi-arch image to GitHub Container Registry (tags `1.2.3`, `1.2`, `latest`; every push to `main` updates `edge`) and attaches `install.sh`, `docker-compose.deploy.yml`, `Caddyfile` and `tailscale-serve.json` to a GitHub Release. The package must be public (repository **Packages** settings) so anyone can pull it.
 
-### Upgrading an existing Docker server to HTTPS
+#### Moving an existing server to HTTPS
 
-If you already run Home Blockbuster from a clone of this repository (the old `docker-compose.yml` that published port 8585), `git pull` and `docker compose build` are not enough: the compose file now also starts Caddy and reads its settings from `.env`.
+A server running from the source folder (HTTP on 8585) keeps working after `git pull`; move it to the installer setup only when you want HTTPS.
 
-1. **Update the code.** If you edited `docker-compose.yml` (for example the media paths), save your changes first with `git stash`, then `git pull`. Do not re-apply the old file: its folder paths now live in `.env`.
-2. **Create `.env`.** Copy `.env.docker.example` to `.env` and set:
-   - `HB_DOMAIN`: the name or IP you open the app with. Devices must use one of these exactly; list several separated by commas, e.g. `nas.local, 192.168.1.20`.
-   - `HB_MOVIES_DIR` and `HB_TV_DIR`: your folders (the old `/path/to/Movies` and `/path/to/TV Shows` lines).
-   - `HB_PASSWORD`, if you want one. `HB_TLS` stays `internal` for a LAN, or set your e-mail for a public domain (see the table above).
-   - `HB_HTTP_PORT` and `HB_HTTPS_PORT`, only if ports 80 and 443 are already used on the machine (many NAS web interfaces use them). Then open the app with the port, e.g. `https://nas.local:8443`.
-3. **Re-add other folders.** USB drives, NAS shares and GPU settings from your old file go into the `volumes:` / `devices:` entries of the `home-blockbuster` service in the new `docker-compose.yml`.
-4. **Start it.** Either build locally or use the published image:
+1. In the old folder: `docker compose down`.
+2. Keep your data: `mkdir -p ~/home-blockbuster && cp -a ./data ~/home-blockbuster/data`.
+3. Run the installer, choose **Tailscale** (or Caddy), and give it the same movie and TV folders.
+4. Libraries are stored with their container paths. The installer mounts the folders at `/media/movies` and `/media/tv`; if your old setup used other paths (a USB drive, a NAS share), add matching volumes to `~/home-blockbuster/docker-compose.yml`.
+5. In the iOS app, add the new `https://…` address (the old `http://<ip>:8585` entry no longer exists once the old container is stopped). No new app build is needed, and the app still accepts plain HTTP servers too.
 
-   ```bash
-   docker compose up -d --build      # build from this checkout
-   # or
-   docker compose pull && docker compose up -d
-   ```
-
-Your `./data` folder is reused as it is, so libraries, profiles and watch history are kept. Port **8585 is no longer reachable from the network**: bookmarks, other devices and saved servers that use `http://<ip>:8585` stop working until they are switched to the new `https://` address. To also reach the app over plain HTTP from the server machine itself, uncomment the `127.0.0.1:8585:8585` port line in the compose file.
-
-**iPhone / iPad app.** No new app build is needed.
-
-1. Edit the saved server (or add a new one) and enter the new address, for example `https://nas.local`, without `:8585`. You may have to sign in again.
-2. On a LAN with the default certificate, trust the server's private CA once. Export it, send it to the device (AirDrop or Files), open it, then install the profile in Settings and switch it on under Settings → General → About → Certificate Trust Settings:
-
-   ```bash
-   docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./home-blockbuster-root-ca.crt
-   ```
-
-3. Use a name that is in `HB_DOMAIN`. The certificate only covers those names, so an IP address that is not listed fails with a certificate error. With a public domain and Let's Encrypt, steps 2 and 3 are not needed.
+Installs made with release 1.0.0 (Caddy only) upgrade in place: re-run the installer and it keeps your settings.
 
 ## Adding your media
 
@@ -236,7 +238,7 @@ Playback, transcoding, hardware acceleration, thumbnails and the automatic scan 
 
 Home Blockbuster is designed for your home network. Without a password, anyone who can open it can browse the server's folders (in the folder browser), change libraries and settings, and watch your media, so:
 
-- **Set a password** during setup or in **Settings → Security** (or with `HB_PASSWORD`) if other people or untrusted devices share your network. **Never expose it to the internet without one**; ideally use a VPN, or the bundled HTTPS setup (see **Docker** above). Each device signs in once for 30 days. Signing out ends that session, and changing the password signs out every device.
+- **Set a password** during setup or in **Settings → Security** (or with `HB_PASSWORD`) if other people or untrusted devices share your network. **Never expose it to the internet without one**; ideally use a VPN, or the bundled HTTPS setup with Tailscale or Caddy (see **Docker** above). Each device signs in once for 30 days. Signing out ends that session, and changing the password signs out every device.
 - Without a password, the server only answers to IP addresses, `localhost` and LAN names, which blocks DNS-rebinding attacks from websites. If you use another host name, add it to `ALLOWED_HOSTS`, or set a password.
 - Symlinks inside a library are only followed when they point into a library folder (or `MEDIA_ROOTS`), so a link dropped into a shared folder can't publish other files on the server. Set `ALLOW_EXTERNAL_SYMLINKS=1` to follow them anyway.
 - The **Kids profile is a filter, not a lock**: it hides titles that aren't rated for children (unrated titles must be tagged family/children) and settings, but anyone can switch profiles.
