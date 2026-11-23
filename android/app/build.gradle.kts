@@ -13,12 +13,13 @@ val communityKeystore = rootProject.file("keystore/community.jks")
 
 android {
     namespace = "com.swissmarley.homeblockbuster"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.swissmarley.homeblockbuster"
         minSdk = 26
-        targetSdk = 35
+        // Google Play requires new apps and updates to target the latest API level (Android 16).
+        targetSdk = 36
         versionCode = (System.getenv("HB_VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("HB_VERSION_NAME") ?: "1.0.0"
     }
@@ -101,4 +102,14 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3")
 
     testImplementation("junit:junit:4.13.2")
+}
+
+// A Play Store bundle must be signed with the private upload key, never the public community key:
+// anyone could sign an "update" with that one. scripts/build-play-bundle.sh sets HB_KEYSTORE_*.
+gradle.taskGraph.whenReady {
+    if (keystorePath == null && allTasks.any { it.path == ":app:bundleRelease" }) {
+        throw GradleException(
+            "bundleRelease needs the private upload key (HB_KEYSTORE_FILE). Run android/scripts/build-play-bundle.sh."
+        )
+    }
 }

@@ -160,6 +160,8 @@ For HTTPS with Caddy's private local CA, install `home-blockbuster-root-ca.crt` 
 
 **Releases:** the [Android workflow](.github/workflows/android.yml) builds and tests every change under `android/`. Pushing a tag such as `android-v1.2.3` (or running the workflow by hand with *release* checked) publishes a GitHub Release with the signed APK. By default the APK is signed with the public community key in `android/keystore/`, so anyone's build of the open-source app updates cleanly; to sign with your own private key instead, add the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` (switching keys means uninstalling the old app once).
 
+**Google Play:** Play takes an Android App Bundle signed with a private upload key, built on your Mac by [`android/scripts/build-play-bundle.sh`](android/scripts/build-play-bundle.sh). Once, run `android/scripts/build-play-bundle.sh create-key` (the key is stored in `~/.homeblockbuster/upload-key.jks`; back it up with its password). For each release, run `android/scripts/build-play-bundle.sh 1.2.3` and upload `android/dist/HomeBlockbuster-1.2.3.aab` in Play Console. Every upload needs a higher version than the last. The Play app and the GitHub APK are signed with different keys, so a phone has one or the other installed. The [privacy policy](docs/PRIVACY.md) is the one to link in the Play Console.
+
 ## Adding your media
 
 Home Blockbuster reads folders **as the server sees them**. Anything the operating system can mount can be a library.
