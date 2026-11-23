@@ -22,3 +22,6 @@ home-blockbuster-root-ca.crt
 
 # The Android app has a Kotlin package named "data"
 !android/**/data/
+
+# Bebas Neue downloaded by play-store/demo_art.py
+android/play-store/.fonts/
