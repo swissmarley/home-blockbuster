@@ -67,6 +67,8 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Robolectric needs the merged resources for the Play Store screenshot test (test-only).
+        unitTests.isIncludeAndroidResources = true
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -102,6 +104,28 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3")
 
     testImplementation("junit:junit:4.13.2")
+
+    // Play Store screenshots (android/play-store/make-screenshots.sh): the real app rendered by Robolectric against an
+    // in-process demo server, captured with Roborazzi. Test-only, so the release build is unchanged.
+    testImplementation(composeBom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.46.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+}
+
+// The screenshot test is slow and needs the generated demo artwork, so it only runs when asked for.
+tasks.withType<Test>().configureEach {
+    val art = System.getenv("HB_SCREENSHOT_ART")
+    if (art == null) {
+        exclude("**/screenshots/**")
+    } else {
+        maxHeapSize = "3g"
+        systemProperty("roborazzi.test.record", "true")
+        // Robolectric downloads its Android runtime from Maven Central; allow a mirror when that is rate-limited.
+        System.getenv("ROBOLECTRIC_REPO_URL")?.let { systemProperty("robolectric.dependency.repo.url", it) }
+        outputs.upToDateWhen { false }
+    }
 }
 
 // A Play Store bundle must be signed with the private upload key, never the public community key:
