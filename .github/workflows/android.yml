@@ -59,7 +59,7 @@ jobs:
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           [ -x "$sdkmanager" ] || sdkmanager="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)"
           yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          "$sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
           echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - uses: gradle/actions/setup-gradle@v4
