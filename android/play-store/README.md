@@ -19,8 +19,9 @@ python3 with Pillow and numpy, and npm (to fetch the Bebas Neue font once). If M
 Robolectric's runtime download, set `ROBOLECTRIC_REPO_URL` to a mirror, for example
 `https://maven-central.storage-download.googleapis.com/maven2`.
 
-The screenshot test is excluded from normal `testDebugUnitTest` runs. It only runs when
-`HB_SCREENSHOT_ART` is set, which the script does. The release build does not change.
+The screenshot test (`app/src/test/screenshots/`) and its test-only dependencies (Robolectric, Roborazzi,
+MockWebServer) are only added to the build when `HB_SCREENSHOT_ART` is set, which the script does. Normal
+`testDebugUnitTest` runs, CI and the release build resolve exactly what they did before.
 
 The script also writes `06-player.png` (1920×1080) and `07-profiles.png`. They are not committed yet:
 on those screens some text is black on the dark background (see the pull request), so add them once

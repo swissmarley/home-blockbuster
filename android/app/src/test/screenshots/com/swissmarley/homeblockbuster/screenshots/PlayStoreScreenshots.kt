@@ -23,10 +23,12 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.media3.ui.PlayerView
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
+import coil3.annotation.DelicateCoilApi
 import coil3.imageDecoderEnabled
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.allowHardware
 import coil3.request.crossfade
+import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.swissmarley.homeblockbuster.HomeBlockbusterApp
 import com.swissmarley.homeblockbuster.MainActivity
@@ -53,10 +55,11 @@ import java.util.IdentityHashMap
 /**
  * Renders the real app (MainActivity, real Compose UI, real networking and image loading) against
  * [DemoServer] and saves the Play Store screenshots. Run through android/play-store/make-screenshots.sh;
- * excluded from normal test runs (see app/build.gradle.kts).
+ * only compiled when HB_SCREENSHOT_ART is set (see app/build.gradle.kts).
  *
  * 360x640 dp at xxhdpi = exactly 1080x1920 px; the landscape player is 1920x1080.
  */
+@OptIn(ExperimentalRoborazziApi::class, DelicateCoilApi::class)
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xxhdpi")

@@ -5,6 +5,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// Play Store screenshots (android/play-store/make-screenshots.sh) are only built when HB_SCREENSHOT_ART is set:
+// normal builds and CI don't resolve Robolectric or Roborazzi, and the release build never changes.
+val screenshots = System.getenv("HB_SCREENSHOT_ART") != null
+
 // Release signing. CI passes a private key through the HB_KEYSTORE_* environment variables when the
 // repository has those secrets; otherwise the public community key in android/keystore is used, so
 // every build of the open-source APK can be installed over the previous one.
@@ -67,8 +71,11 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
-        // Robolectric needs the merged resources for the Play Store screenshot test (test-only).
-        unitTests.isIncludeAndroidResources = true
+        // Robolectric needs the merged resources for the screenshot test.
+        if (screenshots) unitTests.isIncludeAndroidResources = true
+    }
+    sourceSets {
+        if (screenshots) getByName("test").java.srcDir("src/test/screenshots")
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -105,21 +112,18 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
 
-    // Play Store screenshots (android/play-store/make-screenshots.sh): the real app rendered by Robolectric against an
-    // in-process demo server, captured with Roborazzi. Test-only, so the release build is unchanged.
-    testImplementation(composeBom)
-    testImplementation("androidx.compose.ui:ui-test-junit4")
-    testImplementation("org.robolectric:robolectric:4.16")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.46.1")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    if (screenshots) {
+        // The real app rendered by Robolectric against an in-process demo server, captured with Roborazzi.
+        testImplementation(composeBom)
+        testImplementation("androidx.compose.ui:ui-test-junit4")
+        testImplementation("org.robolectric:robolectric:4.16")
+        testImplementation("io.github.takahirom.roborazzi:roborazzi:1.46.1")
+        testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    }
 }
 
-// The screenshot test is slow and needs the generated demo artwork, so it only runs when asked for.
 tasks.withType<Test>().configureEach {
-    val art = System.getenv("HB_SCREENSHOT_ART")
-    if (art == null) {
-        exclude("**/screenshots/**")
-    } else {
+    if (screenshots) {
         maxHeapSize = "3g"
         systemProperty("roborazzi.test.record", "true")
         // Robolectric downloads its Android runtime from Maven Central; allow a mirror when that is rate-limited.
