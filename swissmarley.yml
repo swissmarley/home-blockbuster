@@ -1,0 +1,19 @@
+# Swissmarley Store listing (https://swissmarley-store.vercel.app). Every key is optional.
+name: Home Blockbuster
+tagline: A Netflix-style streaming experience for the movies and shows on your NAS, server or drives.
+category: video
+icon: android/play-store/icon-512.png
+screenshots:
+  - docs/screenshots/home.jpg
+  - docs/screenshots/hover-card.jpg
+  - docs/screenshots/detail.jpg
+  - docs/screenshots/episodes.jpg
+  - docs/screenshots/player.jpg
+  - docs/screenshots/profiles.jpg
+  - docs/screenshots/libraries.jpg
+  - docs/screenshots/mobile.jpg
+developer: Swissmarley
+license: MIT
+# Android: the signed APK from the "android-v*" releases (HomeBlockbuster-<version>.apk).
+# The server itself runs in Docker (install.sh); that file is not an app install and can be
+# ignored in Admin → Review queue.
